@@ -1,0 +1,3 @@
+[submodule "external/AssettoServer"]
+	path = external/AssettoServer
+	url = https://github.com/compujuckel/AssettoServer.git
