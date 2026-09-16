@@ -12,6 +12,7 @@ public class PoliceChaseConfigurationTests
         {
             Assert.That(configuration.Enabled, Is.True);
             Assert.That(configuration.PoliceCarModel, Is.Empty);
+            Assert.That(configuration.PoliceCarSessionId, Is.EqualTo(-1));
             Assert.That(configuration.MaxPoliceSpeedKph, Is.EqualTo(280));
             Assert.That(configuration.FarDistanceMeters, Is.EqualTo(800));
             Assert.That(configuration.MediumDistanceMeters, Is.EqualTo(400));

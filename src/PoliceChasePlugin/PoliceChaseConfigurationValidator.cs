@@ -8,6 +8,11 @@ public class PoliceChaseConfigurationValidator : AbstractValidator<PoliceChaseCo
 {
     public PoliceChaseConfigurationValidator()
     {
+        When(configuration => configuration.Enabled, () =>
+        {
+            RuleFor(configuration => configuration.PoliceCarSessionId)
+                .InclusiveBetween(0, 254);
+        });
         RuleFor(configuration => configuration.MaxPoliceSpeedKph).GreaterThan(0);
         RuleFor(configuration => configuration.NearDistanceMeters)
             .GreaterThan(0)

@@ -20,6 +20,10 @@
     </ProjectReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="PoliceChasePlugin.Tests" />
+  </ItemGroup>
+
   <Target Name="PackagePlugin" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
     <PropertyGroup>
       <PluginPackageDirectory>$(MSBuildProjectDirectory)\..\..\artifacts\PoliceChasePlugin</PluginPackageDirectory>

@@ -8,6 +8,7 @@ public class PoliceChaseConfiguration : IValidateConfiguration<PoliceChaseConfig
 {
     public bool Enabled { get; set; } = true;
     public string PoliceCarModel { get; set; } = "";
+    public int PoliceCarSessionId { get; set; } = -1;
     public float MaxPoliceSpeedKph { get; set; } = 280;
     public float FarDistanceMeters { get; set; } = 800;
     public float MediumDistanceMeters { get; set; } = 400;

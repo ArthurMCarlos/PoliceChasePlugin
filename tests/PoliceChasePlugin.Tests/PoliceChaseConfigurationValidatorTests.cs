@@ -14,7 +14,10 @@ public class PoliceChaseConfigurationValidatorTests
     [Test]
     public void AcceptsValidP0Configuration()
     {
-        var result = _validator.Validate(new PoliceChaseConfiguration());
+        var result = _validator.Validate(new PoliceChaseConfiguration
+        {
+            PoliceCarSessionId = 0
+        });
 
         Assert.That(result.IsValid, Is.True);
     }
@@ -76,5 +79,35 @@ public class PoliceChaseConfigurationValidatorTests
         var result = _validator.Validate(configuration);
 
         Assert.That(result.Errors, Has.Some.Property("PropertyName").EqualTo(expectedProperty));
+    }
+
+    [TestCase(-1)]
+    [TestCase(255)]
+    public void RejectsInvalidPoliceSessionIdWhenEnabled(int sessionId)
+    {
+        var configuration = new PoliceChaseConfiguration
+        {
+            Enabled = true,
+            PoliceCarSessionId = sessionId
+        };
+
+        var result = _validator.Validate(configuration);
+
+        Assert.That(result.Errors, Has.Some.Property("PropertyName")
+            .EqualTo(nameof(PoliceChaseConfiguration.PoliceCarSessionId)));
+    }
+
+    [Test]
+    public void AcceptsUnsetPoliceSessionIdWhenDisabled()
+    {
+        var configuration = new PoliceChaseConfiguration
+        {
+            Enabled = false,
+            PoliceCarSessionId = -1
+        };
+
+        var result = _validator.Validate(configuration);
+
+        Assert.That(result.IsValid, Is.True);
     }
 }
