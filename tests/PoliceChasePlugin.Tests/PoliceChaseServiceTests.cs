@@ -1,4 +1,8 @@
 using Serilog;
+using PoliceChasePlugin.Ai;
+using PoliceChasePlugin.Players;
+using PoliceChasePlugin.Tests.Ai;
+using PoliceChasePlugin.Tests.Players;
 
 namespace PoliceChasePlugin.Tests;
 
@@ -28,7 +32,9 @@ public class PoliceChaseServiceTests
     public async Task EnabledServiceLogsInitializationAndShutdown()
     {
         using var service = new PoliceChaseService(
-            new PoliceChaseConfiguration { Enabled = true },
+            new PoliceChaseConfiguration { Enabled = true, PoliceCarSessionId = 7 },
+            CreateAiService(),
+            CreateTargetService().Service,
             _lifetime);
 
         await service.StartAsync(CancellationToken.None);
@@ -47,6 +53,8 @@ public class PoliceChaseServiceTests
     {
         using var service = new PoliceChaseService(
             new PoliceChaseConfiguration { Enabled = false },
+            CreateAiService(),
+            CreateTargetService().Service,
             _lifetime);
 
         await service.StartAsync(CancellationToken.None);
@@ -57,5 +65,65 @@ public class PoliceChaseServiceTests
             Assert.That(_sink.ContainsMessage("[PoliceChase] Plugin disabled by configuration"), Is.True);
             Assert.That(_sink.ContainsMessage("[PoliceChase] Plugin initialized"), Is.False);
         });
+    }
+
+    [Test]
+    public async Task EnabledServiceStartsAndStopsTargetObservation()
+    {
+        var (targetService, source) = CreateTargetService();
+        using var service = new PoliceChaseService(
+            new PoliceChaseConfiguration { Enabled = true, PoliceCarSessionId = 7 },
+            CreateAiService(),
+            targetService,
+            _lifetime);
+
+        await service.StartAsync(CancellationToken.None);
+        await service.StopAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(source.StartCount, Is.EqualTo(1));
+            Assert.That(source.StopCount, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public async Task DisabledServiceDoesNotPrepareAiOrObservePlayers()
+    {
+        var aiSource = new FakePoliceAiSlotSource();
+        var aiService = new PoliceAiService(aiSource, new PoliceChaseConfiguration());
+        var (targetService, playerSource) = CreateTargetService();
+        using var service = new PoliceChaseService(
+            new PoliceChaseConfiguration { Enabled = false },
+            aiService,
+            targetService,
+            _lifetime);
+
+        await service.StartAsync(CancellationToken.None);
+        await service.StopAsync(CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(aiSource.PreparedSessionId, Is.Null);
+            Assert.That(playerSource.StartCount, Is.Zero);
+        });
+    }
+
+    private static PoliceAiService CreateAiService()
+    {
+        var source = new FakePoliceAiSlotSource();
+        source.AddFixedSlot(7, "police");
+        source.States.Add(new FakePoliceAiState(false));
+        return new PoliceAiService(source, new PoliceChaseConfiguration
+        {
+            PoliceCarSessionId = 7,
+            PoliceCarModel = "police"
+        });
+    }
+
+    private static (PoliceTargetService Service, FakePolicePlayerSource Source) CreateTargetService()
+    {
+        var source = new FakePolicePlayerSource();
+        return (new PoliceTargetService(source), source);
     }
 }
