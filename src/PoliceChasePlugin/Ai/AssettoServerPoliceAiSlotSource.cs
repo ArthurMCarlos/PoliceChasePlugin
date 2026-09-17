@@ -31,6 +31,7 @@ internal sealed class AssettoServerPoliceAiSlotSource : IPoliceAiSlotSource
     public IReadOnlyList<IPoliceAiState> PrepareSingleState(byte sessionId)
     {
         var slot = _entryCarManager.EntryCars.Single(car => car.SessionId == sessionId);
+        slot.AiMinOverbooking = 1;
         slot.AiMaxOverbooking = 1;
         slot.SetAiControl(true);
         slot.SetAiOverbooking(1);
