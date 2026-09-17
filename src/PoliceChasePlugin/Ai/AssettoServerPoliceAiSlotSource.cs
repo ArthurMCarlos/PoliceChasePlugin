@@ -14,35 +14,90 @@ internal sealed class AssettoServerPoliceAiState : IPoliceAiState
     }
 }
 
-internal sealed class AssettoServerPoliceAiSlotSource : IPoliceAiSlotSource
+internal interface INativePoliceAiSlot
 {
-    private readonly EntryCarManager _entryCarManager;
+    byte SessionId { get; }
+    string Model { get; }
+    AiMode Mode { get; }
+    int AiMinOverbooking { get; set; }
+    int? AiMaxOverbooking { get; set; }
+    void SetAiControl(bool aiControlled);
+    void SetAiOverbooking(int count);
+    IReadOnlyList<IPoliceAiState> GetStates();
+}
 
-    public AssettoServerPoliceAiSlotSource(EntryCarManager entryCarManager)
+internal sealed class AssettoServerNativePoliceAiSlot : INativePoliceAiSlot
+{
+    private readonly EntryCar _slot;
+
+    public byte SessionId => _slot.SessionId;
+    public string Model => _slot.Model;
+    public AiMode Mode => _slot.AiMode;
+
+    public int AiMinOverbooking
     {
-        _entryCarManager = entryCarManager;
+        get => _slot.AiMinOverbooking;
+        set => _slot.AiMinOverbooking = value;
     }
 
-    public IReadOnlyList<PoliceAiSlotInfo> GetSlots() =>
-        _entryCarManager.EntryCars
-            .Select(car => new PoliceAiSlotInfo(car.SessionId, car.Model, car.AiMode))
-            .ToArray();
-
-    public IReadOnlyList<IPoliceAiState> PrepareSingleState(byte sessionId)
+    public int? AiMaxOverbooking
     {
-        var slot = _entryCarManager.EntryCars.Single(car => car.SessionId == sessionId);
-        slot.AiMinOverbooking = 1;
-        slot.AiMaxOverbooking = 1;
-        slot.SetAiControl(true);
-        slot.SetAiOverbooking(1);
+        get => _slot.AiMaxOverbooking;
+        set => _slot.AiMaxOverbooking = value;
+    }
 
+    public AssettoServerNativePoliceAiSlot(EntryCar slot)
+    {
+        _slot = slot;
+    }
+
+    public void SetAiControl(bool aiControlled) =>
+        _slot.SetAiControl(aiControlled);
+
+    public void SetAiOverbooking(int count) =>
+        _slot.SetAiOverbooking(count);
+
+    public IReadOnlyList<IPoliceAiState> GetStates()
+    {
         var initialized = new List<AiState>();
         var uninitialized = new List<AiState>();
-        slot.GetInitializedStates(initialized, uninitialized);
+        _slot.GetInitializedStates(initialized, uninitialized);
 
         return initialized
             .Concat(uninitialized)
             .Select(state => (IPoliceAiState)new AssettoServerPoliceAiState(state))
             .ToArray();
+    }
+}
+
+internal sealed class AssettoServerPoliceAiSlotSource : IPoliceAiSlotSource
+{
+    private readonly Func<IReadOnlyList<INativePoliceAiSlot>> _getSlots;
+
+    public AssettoServerPoliceAiSlotSource(EntryCarManager entryCarManager)
+    {
+        _getSlots = () => entryCarManager.EntryCars
+            .Select(slot => (INativePoliceAiSlot)new AssettoServerNativePoliceAiSlot(slot))
+            .ToArray();
+    }
+
+    internal AssettoServerPoliceAiSlotSource(IReadOnlyList<INativePoliceAiSlot> slots)
+    {
+        _getSlots = () => slots;
+    }
+
+    public IReadOnlyList<PoliceAiSlotInfo> GetSlots() =>
+        _getSlots()
+            .Select(slot => new PoliceAiSlotInfo(slot.SessionId, slot.Model, slot.Mode))
+            .ToArray();
+
+    public IReadOnlyList<IPoliceAiState> PrepareSingleState(byte sessionId)
+    {
+        var slot = _getSlots().Single(candidate => candidate.SessionId == sessionId);
+        slot.AiMinOverbooking = 1;
+        slot.AiMaxOverbooking = 1;
+        slot.SetAiControl(true);
+        slot.SetAiOverbooking(1);
+        return slot.GetStates();
     }
 }
