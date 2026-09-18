@@ -1,234 +1,297 @@
-# Police Chase P0.7 — route-aware physical lane changing
+# Police Chase P0.7 — Route-Aware Lane Changing
 
 ## Objetivo
 
-Permitir que a única instância dedicada da polícia mude fisicamente para uma faixa adjacente quando essa manobra ainda torna alcançável uma junction necessária da perseguição.
+Adicionar uma transição física de faixa, exclusiva da viatura em perseguição, para que ela alcance junctions, rampas, pontes e saídas que exigem outra faixa. A mudança deve ocorrer sobre uma trajetória contínua, preservar o roteamento forward-only da P0.6 e não alterar o comportamento dos dez carros normais de tráfego.
 
-A P0.7 não adiciona ultrapassagem ofensiva, PIT, roadblocks, múltiplas viaturas, direção contrária, teleporte, sirene, luzes, Heat/Wanted ou HUD.
+A P0.7 termina pronta para validação no servidor real. Ela não será declarada funcional antes da Skoda executar visualmente a manobra na Shutoko.
 
-## Restrições preservadas
+## Base validada
 
-- O grafo continua contendo somente `SplinePoint.NextId` e `SplineJunction.EndPointId`.
-- `GetLanes()` continua representando equivalência/localização, não uma aresta de movimento.
-- Cada manobra atravessa somente uma relação imediata `LeftId` ou `RightId`.
-- Junctions reais continuam sendo executadas por `JunctionEvaluator`.
-- O roteamento continua forward-only.
-- Grace, no-route, suspensão e probe da P0.6 permanecem ativos.
-- O lifecycle, a reserva dedicada e os dez carros dinâmicos permanecem inalterados.
-- O tráfego normal não recebe lane changing novo.
-- Não será usada reflection.
+- PoliceChasePlugin `main`: `168a63c9fdbd4e282fecb3d46a5fa56c5033f927`.
+- Fork AssettoServer: `793abe4810f5860b3f9b63f93dc9bce7240ba57b`.
+- AssettoServer exibido no servidor: `0.0.54+793abe4810`.
+- P0.4: uma instância dedicada no CAR_12 sem reduzir os dez bots dinâmicos.
+- P0.5: perseguição, controle individual de velocidade e retenção espacial.
+- P0.6: roteamento forward-only, decisões explícitas de junction, corridor stateful, grace, no-route, probe e equivalência de faixas na localização.
+- Testes atuais: 75 aprovados, nenhuma falha.
 
-## Componentes
+## Investigação do mecanismo existente
 
-### `AiPursuitLaneSelector`
+### O tráfego nativo não troca de faixa
 
-Componente puro no namespace de routing. Ele recebe:
+No core fixado não existe estado de `current lane`, `target lane`, `lane offset`, `lane transition`, `desired lane` ou `overtake lane` durante a condução.
 
-- o ponto físico atual da polícia;
-- os candidatos localizados para o alvo;
-- o resultado/corredor atual;
-- os limites de busca já configurados;
-- o estado/revisão da decisão anterior.
+O fluxo real é:
 
-O seletor primeiro tenta a faixa atual. Se ela continuar alcançando o corredor, nenhuma troca é solicitada.
+1. `AiBehavior.GetSpawnPoint()` usa `AiSpline.RandomLane()` para escolher aleatoriamente um ponto entre os equivalentes retornados por `GetLanes()`.
+2. `AiState.Teleport()` inicializa o estado exatamente nessa cadeia de pontos.
+3. `AiState.Move()` avança somente por `JunctionEvaluator.TryNext()`.
+4. `AiState.Update()` avalia Catmull–Rom entre `CurrentSplinePointId` e o próximo ponto e publica posição, rotação e velocidade.
+5. O carro permanece nessa cadeia até chegar a uma `SplineJunction`, ao fim da spline ou ser reposicionado pelo lifecycle espacial.
 
-Quando a faixa atual não alcança o corredor confirmado do alvo, o seletor avalia somente `LeftId` e `RightId` imediatos que:
+Logo, os bots observados em faixas diferentes nasceram nelas. Uma transição visual em uma bifurcação é o caminho configurado por uma `SplineJunction`, não uma mudança de faixa genérica.
 
-- existem;
-- possuem a mesma direção;
-- estão dentro de uma largura lateral plausível;
-- possuem continuidade forward suficiente para uma manobra;
-- conseguem produzir uma rota válida com o mesmo `AiRoutePlanner`.
+Sistemas como 2REAL e No Hesi utilizam outro controlador de tráfego. Esse comportamento não está disponível para reutilização no AssettoServer desta solução.
 
-Ele retorna uma decisão tipada com faixa origem, faixa destino, direção lateral, rota de destino, distância até a primeira decisão relevante e motivo. A escolha prioriza:
+### Representação de faixas
 
-1. permanecer na faixa atual;
-2. uma única faixa adjacente;
-3. rota forward válida com espaço para concluir a manobra;
-4. menor custo de rota como desempate.
+`AdjacentLaneDetector.DetectAdjacentLanes()` procura pontos lateralmente próximos durante a criação do cache e preenche `SplinePoint.LeftId` e `SplinePoint.RightId`. `SplinePointOperations.GetLanes()` percorre essa cadeia respeitando direção. `MutableAiSpline` grava os grupos no cache e `AiSpline.GetLanes()` os expõe.
 
-Não haverá busca combinatória por todas as faixas. Para atravessar duas faixas, a segunda decisão só será avaliada após concluir a primeira.
+No tráfego normal, essa informação é usada para:
 
-### `AiLaneChangeController`
+- escolha aleatória de faixa no spawn por `AiSpline.RandomLane()`;
+- contagem de faixas e overrides de distância de segurança;
+- filtragem de `AllowedLanes` no spawn;
+- variação de velocidade conforme a posição da faixa.
 
-Estado por `AiState`, criado mas inativo para bots normais. Estados conceituais:
+Na P0.6, `GetLanes()` também expande destinos equivalentes do target. Esses equivalentes continuam sendo identidade topológica para localização, nunca arestas gratuitas de movimento.
 
-- `None`;
-- `WaitingForGap`;
-- `Changing`;
-- `Cooldown`.
+### Junctions e movimento físico
 
-Uma solicitação guarda:
+`MutableAiSpline.ApplyConfiguration()` transforma `Junctions` e `ConnectEnd` do `config.yml` em `SplineJunction`. `JunctionEvaluator.Next()` escolhe `SplinePoint.NextId` ou `SplineJunction.EndPointId`. `AiState.Move()`, `CalculateTangents()` e `SplineLookahead()` usam o mesmo evaluator.
 
-- ponto/faixa origem;
-- ponto/faixa destino adjacente;
-- direção;
+A P0.6 publica decisões explícitas no `JunctionEvaluator`, permitindo à polícia escolher uma conexão real. Isso funciona somente quando a cadeia física atual alcança o ponto inicial da junction.
+
+### Obstáculos
+
+`AiState.DetectObstacles()` combina:
+
+- `SplineLookahead()`, que consulta `SlowestAiStates` ao longo do caminho decidido;
+- `FindClosestPlayerObstacle()`, que procura jogadores à frente;
+- frenagem, parada e collision stop já existentes.
+
+Esse mecanismo protege a faixa atual, mas não procura veículo ao lado ou atrás em uma faixa destino porque o core nunca precisou decidir uma mudança lateral. A P0.7 deve complementar a verificação apenas para a manobra policial e continuar aplicando os limites nativos de velocidade e colisão.
+
+## Causa raiz confirmada
+
+A P0.6 consegue localizar o jogador por pontos espacialmente próximos e equivalentes e consegue dirigir junctions que já sejam alcançáveis pela cadeia atual. Entretanto, o `AiState` não possui mecanismo para sair dessa cadeia e ocupar fisicamente uma faixa adjacente.
+
+Quando o alvo confirma um ramo acessível apenas por outra faixa:
+
+1. a faixa policial atual deixa de oferecer rota forward para o corredor do alvo;
+2. um ponto equivalente pode identificar corretamente a região, mas não move o carro lateralmente;
+3. `AiRoutePlanner` não deve transformar `LeftId`/`RightId` em arestas de rota;
+4. sem uma transição física, a polícia passa da entrada;
+5. depois disso, `RouteTemporarilyUnavailable` e `NoRoute` são resultados corretos.
+
+## Decisão arquitetural
+
+Será criada uma transição física própria no core, exclusiva de um `AiState` com pursuit ativa. A solução terá duas responsabilidades separadas:
+
+- seleção route-aware da faixa adjacente necessária;
+- execução stateful de uma trajetória lateral contínua.
+
+O plugin continuará sendo o orquestrador da perseguição e dos logs. O core continuará sendo o proprietário do grafo, spline, movimento, obstáculos e estado físico.
+
+## Seleção route-aware
+
+Um componente puro de seleção receberá o ponto policial, os candidatos do target, a rota/corridor atual, os limites de busca e a revisão da rota.
+
+Regras:
+
+1. A faixa atual sempre tem preferência quando ainda alcança adequadamente o corredor confirmado do alvo.
+2. Se a faixa atual não alcançar esse corredor, avaliar somente `LeftId` e `RightId` imediatos e de mesma direção.
+3. Executar o mesmo planejamento forward-only a partir de cada candidato adjacente, sem inserir a transição lateral no `AiRouteGraph`.
+4. Aceitar uma faixa somente se ela alcançar o corredor por `NextId` e `SplineJunction` reais.
+5. Identificar a primeira decisão relevante e sua distância ao longo do plano.
+6. Solicitar a manobra somente quando existir distância suficiente para concluí-la antes da decisão.
+7. Em empate, preferir nenhuma mudança; depois, uma única faixa adjacente; por fim, a rota forward de menor custo.
+
+O sistema não tenta adivinhar a intenção futura do jogador. A preparação começa quando a posição e o movimento do target confirmam o novo corredor, desde que a polícia ainda não tenha passado da entrada.
+
+Se a saída já foi perdida, nenhuma faixa é aceita como correção artificial e o fluxo de no-route permanece.
+
+## Transição física
+
+O AssettoServer representa sua AI de modo cinemático: `AiState.Update()` calcula e publica diretamente a pose sobre a spline. Não existe comando nativo de volante para reutilizar.
+
+O controlador de lane change manterá:
+
+- ponto/progresso da cadeia de origem;
+- ponto/progresso da cadeia de destino;
 - distância total da manobra;
-- revisão da rota que originou a solicitação;
-- rota válida a ser usada após a conclusão.
+- distância já percorrida;
+- revisão de rota que originou a solicitação;
+- instante da última conclusão/cancelamento;
+- fase da manobra.
 
-Durante `WaitingForGap`, revisões podem cancelar ou substituir a solicitação. Depois que `Changing` começa, a manobra fica comprometida: uma revisão não causa retorno lateral imediato. A nova rota será reavaliada ao terminar, evitando ping-pong.
+As fases serão equivalentes a:
 
-### Integração com `AiState`
+- `None`: sem necessidade;
+- `WaitingForGap`: faixa necessária, mas ainda insegura;
+- `Changing`: manobra comprometida;
+- `Completed`: destino fisicamente alcançado;
+- `Cancelled`: solicitação ainda não iniciada tornou-se inválida.
 
-`AiState.TrackPursuit()` continuará sendo o único ponto público de controle da perseguição. Ele:
+Durante `Changing`, os cursores de origem e destino avançam pela mesma distância longitudinal. A pose é obtida por uma interpolação suave entre as duas curvas, com velocidade lateral nula nos extremos. Rotação e velocidade derivam da tangente da trajetória combinada.
 
-1. localiza o alvo;
-2. atualiza a rota normal;
-3. solicita avaliação lateral antes de publicar uma perda de rota definitiva;
-4. publica decisões reais de junction;
-5. inclui o estado tipado da lane change em `AiPursuitTrackingResult`.
+Enquanto a interpolação não termina, a cadeia lógica atual não é substituída antecipadamente. Ao atingir fisicamente o destino, `CurrentSplinePointId` e o progresso passam para o cursor de destino, as tangentes são recalculadas e o navigator continua a partir da nova posição.
 
-`AiState.Update()` continuará calculando velocidade, rotação, pneus e flags. Quando não existir lane change, seu caminho atual permanecerá byte-for-byte conceitualmente igual. Quando a manobra estiver ativa, ele usará a trajetória transitória descrita abaixo.
+Uma manobra atravessa exatamente uma adjacência. `RIGHT -> LEFT` exige duas conclusões físicas quando existe `MIDDLE` entre elas.
 
-## Trajetória física
+## Segurança da manobra
 
-No início da manobra serão criados dois cursores longitudinais:
+Antes do início, uma verificação dedicada e tipada examinará o corredor da faixa destino:
 
-- cursor origem, inicializado no progresso físico atual;
-- cursor destino, inicializado no ponto adjacente alinhado.
+- AI à frente;
+- AI ao lado;
+- AI atrás;
+- jogadores nessas regiões;
+- distância disponível;
+- velocidade relativa de aproximação traseira;
+- largura, alinhamento, sentido e diferença vertical plausíveis entre os pontos adjacentes.
 
-Em cada tick ambos avançam a mesma `moveMeters`. Cada cursor avalia sua própria posição e tangente sobre os pontos reais da spline. O progresso lateral é a distância percorrida dividida pela distância total da manobra.
+Serão reutilizados `EntryCarManager`, os `AiState` inicializados, `SlowestAiStates`, posições e velocidades existentes. Não haverá reflection.
 
-A posição é interpolada com uma função smoothstep de derivadas nulas nas extremidades. A tangente usada para rotação e velocidade inclui a derivada lateral, evitando snap de orientação.
+Se bloqueada antes do início, a viatura permanece na faixa atual e aguarda. Durante a manobra, o lookahead considera origem e destino e aplica o limite de velocidade mais restritivo. Um risco detectado reduz ou zera a velocidade usando a frenagem atual; não causa snap nem inversão lateral.
 
-Enquanto o progresso for menor que 1:
+Depois do commit, a manobra termina antes que outra possa começar. Uma revisão de rota pode cancelar apenas uma solicitação ainda em espera. Uma manobra já iniciada termina de forma estável; a nova rota é considerada depois da conclusão.
 
-- `CurrentSplinePointId` continua representando a cadeia de origem;
-- a posição permanece sobre a trajetória transitória;
-- nenhuma aresta lateral é adicionada ao route planner.
+Se não surgir uma janela segura antes da junction, a entrada pode ser perdida legitimamente.
 
-Quando o progresso chega a 1:
+## Histerese e mudanças sequenciais
 
-1. a posição já coincide com a trajetória destino;
-2. `CurrentSplinePointId` e `_currentVecProgress` recebem o cursor destino;
-3. tangentes normais são recalculadas;
-4. a rota é retomada/recalculada a partir desse ponto;
-5. inicia o cooldown.
+- Uma única solicitação ativa por `AiState`.
+- Identidade baseada em origem, destino e revisão da rota.
+- Solicitações idênticas não são republicadas a cada tick.
+- Cooldown após conclusão ou cancelamento.
+- Uma nova faixa somente após conclusão física da anterior.
+- A faixa atual volta a ter preferência após cada conclusão.
+- Mudanças do jogador que não alterem reachability não geram solicitação.
 
-Se a cadeia destino termina ou diverge antes da distância exigida, a manobra não começa.
+## Integração com P0.5 e P0.6
 
-## Antecipação
+`AiState.TrackPursuit()` continuará sendo a entrada pública. As opções serão estendidas com a política mínima de lane change.
 
-O sistema não tenta prever uma escolha que o jogador ainda não realizou. A preparação começa assim que o movimento/localização do alvo confirma outro corredor e enquanto a polícia ainda está atrás da decisão.
+O snapshot de pursuit armazenará a decisão/estado necessário. O `JunctionEvaluator` continuará recebendo apenas decisões de junction reais. Ao concluir a troca, o corridor será recalculado a partir do ponto físico de destino.
 
-A manobra somente será aceita se a distância forward até a junction/decisão necessária comportar:
+Permanecem intactos:
 
-- a distância da troca atual;
-- uma troca adicional para cada faixa ainda necessária;
-- uma margem estrutural para concluir antes da bifurcação.
+- retenção espacial da polícia;
+- velocidade desejada e limites de segurança;
+- lifecycle e reserva dedicada;
+- grace period;
+- suspensão por no-route;
+- probes de recuperação;
+- target localization por lane equivalents;
+- grafo exclusivamente formado por `NextId` e `SplineJunction`.
 
-A margem será derivada da própria distância de manobra; não será introduzido um quarto parâmetro arbitrário.
+## Contrato e diagnóstico
 
-Se a polícia já passou da entrada, nenhuma faixa candidata produzirá rota forward válida. O resultado continuará sendo grace/no-route, sem retorno, teleporte ou aresta artificial.
+O resultado de tracking carregará diagnóstico tipado da transição de faixa. O contrato representará somente mudanças de estado, contendo conforme aplicável:
 
-## Segurança
-
-### Antes de começar
-
-Uma verificação conservadora do corredor destino considera:
-
-- AI à frente na cadeia destino;
-- AI ao lado da trajetória;
-- AI atrás e sua velocidade relativa;
-- jogadores dentro do corredor da manobra;
-- comprimentos dos veículos e safety distances existentes.
-
-Se o espaço não for seguro, o estado permanece `WaitingForGap` e a polícia continua longitudinalmente na faixa atual.
-
-### Durante a manobra
-
-- O lookahead longitudinal da origem continua ativo.
-- Um lookahead equivalente na cadeia destino limita a velocidade pelo menor valor seguro.
-- Jogadores no corredor continuam participando da frenagem.
-- Se surgir risco após o commit, a polícia freia; ela não inverte automaticamente a trajetória lateral.
-- Collision handling existente permanece como última proteção, não como mecanismo de decisão.
-
-Se a oportunidade não surgir antes da bifurcação, a troca expira e o no-route existente permanece correto.
-
-## Histerese e revisão de rota
-
-- Uma manobra ativa precisa terminar antes de outra começar.
-- O cooldown impede troca imediata de volta.
-- Uma decisão em espera é substituída somente quando a revisão de rota muda o destino necessário.
-- Mudança de faixa do jogador sem alteração de reachability não gera solicitação.
-- Mudanças múltiplas são sempre sequenciais.
-
-## Configuração mínima
-
-Adicionar ao `PoliceChaseConfiguration`:
-
-- `PursuitLaneChangeEnabled`, padrão `true`;
-- `PursuitLaneChangeDistanceMeters`, distância física de uma manobra;
-- `PursuitLaneChangeCooldownMilliseconds`, intervalo mínimo após conclusão.
-
-Os valores padrão serão definidos e validados a partir do teste sintético e do pacote real. Não serão alterados parâmetros globais de AI Traffic.
-
-Essas opções serão transportadas por `PolicePursuitTrackingOptions` até `AiPursuitTrackingOptions`. O core não conhecerá `PoliceChaseConfiguration` nem `PoliceCarSessionId`; a existência de um snapshot de pursuit é o gate da capacidade.
-
-## Diagnóstico tipado
-
-Adicionar um diagnóstico/evento de lane change ao resultado de tracking, com revisão monotônica e informações suficientes para o plugin deduplicar logs:
-
-- estado/transição;
-- ponto origem;
-- ponto destino;
-- direção;
-- motivo;
+- evento/fase;
+- faixa/ponto de origem;
+- faixa/ponto de destino;
+- motivo da seleção ou cancelamento;
 - distância até a decisão;
 - revisão da rota;
-- motivo de espera/cancelamento, quando aplicável.
+- indicação de bloqueio.
 
-O plugin mapeará o contrato do core sem reflection e emitirá logs somente quando a revisão/evento mudar:
+O adapter do plugin traduzirá esse contrato para seus próprios tipos. `PolicePursuitService` registrará somente transições:
 
-- required/requested;
-- waiting for gap;
+- lane change required;
+- waiting for safe gap;
 - started;
 - completed;
 - cancelled;
 - route revised.
 
-## Testes automatizados
+Não haverá log por frame.
 
-### Core sintético
+## Configuração mínima
 
-Cobrir:
+Serão expostos no plugin:
 
-1. faixa atual alcança o alvo: nenhuma troca;
-2. adjacente é necessária: solicitação antecipada;
-3. duas faixas: duas decisões consecutivas, nunca salto;
-4. destino bloqueado: espera;
-5. bloqueio removido: início permitido;
-6. revisão antes do início: cancelamento/substituição segura;
-7. revisão durante o commit: manobra termina sem ping-pong;
-8. conclusão: identidade física muda somente no final;
-9. continuidade de posição, tangente e velocidade nas extremidades;
-10. saída já perdida: no-route sem reverse/teleport;
-11. jogador troca de faixa, mas reachability não muda: nenhuma troca;
-12. tráfego sem pursuit: comportamento existente inalterado.
+- `PursuitLaneChangeEnabled`: habilita a capacidade, padrão `true`.
+- `PursuitLaneChangeDistanceMeters`: distância longitudinal usada para completar uma adjacência.
+- `PursuitLaneChangeCooldownMilliseconds`: intervalo mínimo após uma manobra.
 
-### Integração
+A distância de preparação será derivada da distância de manobra multiplicada pela quantidade de adjacências necessárias, acrescida da distância até a primeira decisão real. Não será criado parâmetro separado enquanto os testes não demonstrarem necessidade.
 
-- Preservar os 75 testes existentes.
-- Adicionar regressões do mapper e dos logs do plugin.
-- Carregar o `fast_lane.aip` real por `POLICE_CHASE_FAST_LANE_AIP` sem versionar o arquivo.
-- Identificar uma região real onde uma cadeia adjacente alcança uma junction indisponível na cadeia atual.
-- Provar a seleção da faixa e a continuidade da rota no grafo real.
-- Se o runner não simular todo o loop temporal do servidor, separar decisão, trajetória e integração de grafo, mantendo validação visual obrigatória.
+Valores finais e limites de validação serão escolhidos a partir do fast_lane real e registrados no plano de implementação.
 
-## Validação real
+## Testes
 
-A entrega automatizada ficará marcada como “pronta para validação”, não concluída. No servidor será necessário comprovar:
+### Testes puros
+
+- faixa atual alcança o target: não trocar;
+- esquerda ou direita é a única adjacente alcançável: solicitar;
+- direção oposta ou geometria inválida: rejeitar;
+- saída já ultrapassada: não criar rota reversa;
+- revisão enquanto espera: cancelar ou substituir com segurança;
+- revisão durante manobra: concluir, depois recalcular;
+- cooldown e deduplicação impedem ping-pong;
+- duas faixas: duas solicitações sequenciais, nunca salto direto.
+
+### Segurança e trajetória
+
+- destino livre inicia a mudança;
+- veículo à frente, ao lado ou atrás bloqueia o início;
+- velocidade relativa traseira torna um gap inseguro;
+- remoção do obstáculo libera a manobra;
+- posição e tangente são contínuas no início e no fim;
+- ID de destino somente é assumido ao completar;
+- lookahead mais restritivo limita a velocidade durante a transição.
+
+### Regressão
+
+- todos os 75 testes atuais continuam passando;
+- tráfego sem pursuit não cria controlador de lane change ativo;
+- dez bots dinâmicos e slot dedicado permanecem inalterados;
+- junctions explícitas, grace, no-route e probe continuam funcionando;
+- nenhuma aresta lateral aparece no `AiRouteGraph`.
+
+### Fast lane real
+
+O pacote `C:\Users\arthur.carlos\Downloads\fast_lane.aip` será carregado pelo parser real. Os testes devem identificar pelo menos uma região em que:
+
+1. a cadeia policial atual não alcance o ramo do target;
+2. uma adjacente de mesma direção alcance uma junction real;
+3. a seleção solicite a adjacência antes dessa junction;
+4. a conclusão coloque a polícia na cadeia correta;
+5. o plano subsequente atravesse a conexão real.
+
+Se a pose completa não puder ser executada no teste de integração sem construir o servidor inteiro, serão separados teste de decisão, teste matemático da trajetória, integração de grafo real e validação visual obrigatória.
+
+## Validação no servidor
+
+O roteiro final deverá verificar:
 
 1. perseguição básica sem regressão;
-2. mudança simples contínua e sem snap;
-3. entrada na subida/ponte que motivou a P0.7;
-4. uma segunda bifurcação real;
-5. espera diante de faixa bloqueada;
-6. no-route correto quando a saída já foi perdida;
-7. dez bots normais e reserva dedicada preservados;
-8. ausência de loop de reacquisition e de spam de logs.
+2. mudança simples em vias paralelas;
+3. subida/ponte que motivou a P0.7;
+4. uma segunda saída real;
+5. target mudando de faixa sem mudar reachability;
+6. faixa destino bloqueada e posterior liberação;
+7. saída propositalmente perdida;
+8. ausência de start/no-route loop;
+9. tráfego, RandomWeatherPlugin, WeatherFX, RainFX e Overtake inalterados.
+
+## Fora de escopo
+
+- alteração do tráfego comum;
+- lane change oportunista ou ultrapassagem ofensiva;
+- PIT, ram, roadblock ou reforços;
+- múltiplas viaturas;
+- Heat/Wanted, HUD, sirene ou luzes;
+- direção contrária;
+- teleport, respawn deliberado ou reverse routing;
+- integração ou dependência de No Hesi/2REAL;
+- edição do fast_lane para fabricar conexões inexistentes;
+- P0.8.
+
+## Critério de pronto para validação
+
+- testes anteriores e novos testes aprovados;
+- builds Release do core e plugin sem novos erros;
+- commits separados e publicados no parent e no fork;
+- artefatos e arquivos de instalação documentados;
+- logs de transição documentados;
+- nenhuma mudança nos parâmetros globais de tráfego;
+- implementação entregue como candidata à validação real, sem declarar a P0.7 concluída antes do teste visual.
 
 ## Publicação
 
-O core será desenvolvido em nova branch `codex/p0.7-route-aware-lane-changing` do fork `ArthurMCarlos/AssettoServer`. O repositório principal atualizará o submodule somente após testes e build. Commits serão pequenos e separados entre contratos/decisão, trajetória/segurança, integração, testes e documentação.
+O core será desenvolvido na branch `codex/p0.7-route-aware-lane-changing` do fork `ArthurMCarlos/AssettoServer`. O repositório principal permanecerá em `main` e atualizará o ponteiro do submodule depois da verificação completa. Os commits serão separados por investigação/documentação, decisão de faixa, trajetória e segurança, integração do plugin, testes e guia de validação.
