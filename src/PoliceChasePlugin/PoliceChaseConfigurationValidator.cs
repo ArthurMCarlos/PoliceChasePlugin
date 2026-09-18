@@ -22,5 +22,14 @@ public class PoliceChaseConfigurationValidator : AbstractValidator<PoliceChaseCo
             .GreaterThan(0);
         RuleFor(configuration => configuration.PursuitUpdateIntervalMilliseconds)
             .GreaterThan(0);
+        RuleFor(configuration => configuration.PursuitRouteSearchMaxDistanceMeters)
+            .Must(float.IsFinite)
+            .GreaterThanOrEqualTo(configuration => configuration.PursuitMaxDistanceMeters);
+        RuleFor(configuration => configuration.PursuitRouteSearchMaxVisitedNodes)
+            .GreaterThan(0);
+        RuleFor(configuration => configuration.PursuitRouteGraceMilliseconds)
+            .GreaterThan(0);
+        RuleFor(configuration => configuration.PursuitNoRouteProbeIntervalMilliseconds)
+            .GreaterThan(0);
     }
 }

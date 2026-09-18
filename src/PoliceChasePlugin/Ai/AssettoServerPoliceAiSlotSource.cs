@@ -1,6 +1,9 @@
 using AssettoServer.Server;
 using AssettoServer.Server.Ai;
 using CoreTrackingStatus = AssettoServer.Server.Ai.AiPursuitTrackingStatus;
+using CoreTrackingOptions = AssettoServer.Server.Ai.AiPursuitTrackingOptions;
+using CoreRouteDiagnostics = AssettoServer.Server.Ai.AiPursuitRouteDiagnostics;
+using CoreRouteUpdateKind = AssettoServer.Server.Ai.Routing.AiPursuitRouteUpdateKind;
 
 namespace PoliceChasePlugin.Ai;
 
@@ -9,7 +12,7 @@ internal interface INativePolicePursuitState
     bool IsInitialized { get; }
     PolicePursuitTrackingResult TrackPursuit(
         byte targetSessionId,
-        float maxDistanceMeters);
+        PolicePursuitTrackingOptions options);
     void SetDesiredSpeed(float metersPerSecond);
     void ReleasePursuit();
 }
@@ -31,7 +34,7 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
 
     public PolicePursuitTrackingResult TrackPursuit(
         byte targetSessionId,
-        float maxDistanceMeters)
+        PolicePursuitTrackingOptions options)
     {
         var target = _findTarget(targetSessionId);
         if (target == null || target.Client == null)
@@ -42,11 +45,18 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
                 0);
         }
 
-        var result = _state.TrackPursuit(target, maxDistanceMeters);
+        var result = _state.TrackPursuit(target, new CoreTrackingOptions(
+            options.MaximumSpatialDistanceMeters,
+            options.MaximumRouteDistanceMeters,
+            options.MaximumVisitedNodes,
+            options.RouteGraceMilliseconds));
         return new PolicePursuitTrackingResult(
             MapStatus(result.Status),
             result.RouteDistanceMeters,
-            result.TargetSpeedMetersPerSecond);
+            result.TargetSpeedMetersPerSecond,
+            result.RouteDiagnostics == null
+                ? null
+                : MapDiagnostics(result.RouteDiagnostics));
     }
 
     public void SetDesiredSpeed(float metersPerSecond) =>
@@ -65,6 +75,34 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
                 PolicePursuitTrackingStatus.MaxDistanceExceeded,
             CoreTrackingStatus.NoRoute => PolicePursuitTrackingStatus.NoRoute,
             _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
+        };
+
+    internal static PolicePursuitRouteDiagnostics MapDiagnostics(
+        CoreRouteDiagnostics diagnostics) =>
+        new(
+            diagnostics.Revision,
+            MapUpdateKind(diagnostics.UpdateKind),
+            diagnostics.PolicePointId,
+            diagnostics.TargetPointId,
+            diagnostics.RouteDistanceMeters,
+            diagnostics.VisitedNodes,
+            diagnostics.JunctionDecisions
+                .Select(decision => new PolicePursuitJunctionDecision(
+                    decision.JunctionId,
+                    decision.TakeBranch,
+                    decision.EndPointId))
+                .ToArray());
+
+    private static PolicePursuitRouteUpdateKind MapUpdateKind(
+        CoreRouteUpdateKind updateKind) =>
+        updateKind switch
+        {
+            CoreRouteUpdateKind.Selected => PolicePursuitRouteUpdateKind.Selected,
+            CoreRouteUpdateKind.Reused => PolicePursuitRouteUpdateKind.Reused,
+            CoreRouteUpdateKind.Extended => PolicePursuitRouteUpdateKind.Extended,
+            CoreRouteUpdateKind.Recalculated => PolicePursuitRouteUpdateKind.Recalculated,
+            CoreRouteUpdateKind.Recovered => PolicePursuitRouteUpdateKind.Recovered,
+            _ => throw new ArgumentOutOfRangeException(nameof(updateKind), updateKind, null)
         };
 }
 
@@ -88,8 +126,8 @@ internal sealed class AssettoServerPoliceAiState : IPoliceAiState
 
     public PolicePursuitTrackingResult TrackPursuit(
         byte targetSessionId,
-        float maxDistanceMeters) =>
-        _native.TrackPursuit(targetSessionId, maxDistanceMeters);
+        PolicePursuitTrackingOptions options) =>
+        _native.TrackPursuit(targetSessionId, options);
 
     public void SetDesiredSpeed(float metersPerSecond) =>
         _native.SetDesiredSpeed(metersPerSecond);

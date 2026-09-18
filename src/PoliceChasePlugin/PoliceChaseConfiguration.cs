@@ -13,4 +13,8 @@ public class PoliceChaseConfiguration : IValidateConfiguration<PoliceChaseConfig
     public float PursuitDesiredDistanceMeters { get; set; } = 50;
     public float PursuitMaxSpeedKph { get; set; } = 180;
     public int PursuitUpdateIntervalMilliseconds { get; set; } = 200;
+    public float PursuitRouteSearchMaxDistanceMeters { get; set; } = 20_000;
+    public int PursuitRouteSearchMaxVisitedNodes { get; set; } = 50_000;
+    public int PursuitRouteGraceMilliseconds { get; set; } = 2_000;
+    public int PursuitNoRouteProbeIntervalMilliseconds { get; set; } = 2_000;
 }

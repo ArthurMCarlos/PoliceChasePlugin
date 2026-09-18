@@ -12,7 +12,7 @@ public class PoliceChaseConfigurationValidatorTests
     }
 
     [Test]
-    public void AcceptsValidP05Configuration()
+    public void AcceptsValidP06Configuration()
     {
         var result = _validator.Validate(new PoliceChaseConfiguration
         {
@@ -75,6 +75,73 @@ public class PoliceChaseConfigurationValidatorTests
 
         Assert.That(result.Errors, Has.Some.Property("PropertyName")
             .EqualTo(nameof(PoliceChaseConfiguration.PursuitUpdateIntervalMilliseconds)));
+    }
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    [TestCase(float.NaN)]
+    [TestCase(float.PositiveInfinity)]
+    public void RejectsInvalidRouteSearchDistance(float value)
+    {
+        var result = _validator.Validate(new PoliceChaseConfiguration
+        {
+            PursuitRouteSearchMaxDistanceMeters = value
+        });
+
+        Assert.That(result.Errors, Has.Some.Property("PropertyName")
+            .EqualTo(nameof(PoliceChaseConfiguration.PursuitRouteSearchMaxDistanceMeters)));
+    }
+
+    [Test]
+    public void RejectsRouteSearchDistanceBelowSpatialMaximum()
+    {
+        var result = _validator.Validate(new PoliceChaseConfiguration
+        {
+            PursuitMaxDistanceMeters = 1500,
+            PursuitRouteSearchMaxDistanceMeters = 1499
+        });
+
+        Assert.That(result.Errors, Has.Some.Property("PropertyName")
+            .EqualTo(nameof(PoliceChaseConfiguration.PursuitRouteSearchMaxDistanceMeters)));
+    }
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    public void RejectsInvalidRouteNodeBudget(int value)
+    {
+        var result = _validator.Validate(new PoliceChaseConfiguration
+        {
+            PursuitRouteSearchMaxVisitedNodes = value
+        });
+
+        Assert.That(result.Errors, Has.Some.Property("PropertyName")
+            .EqualTo(nameof(PoliceChaseConfiguration.PursuitRouteSearchMaxVisitedNodes)));
+    }
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    public void RejectsInvalidRouteGrace(int value)
+    {
+        var result = _validator.Validate(new PoliceChaseConfiguration
+        {
+            PursuitRouteGraceMilliseconds = value
+        });
+
+        Assert.That(result.Errors, Has.Some.Property("PropertyName")
+            .EqualTo(nameof(PoliceChaseConfiguration.PursuitRouteGraceMilliseconds)));
+    }
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    public void RejectsInvalidNoRouteProbeInterval(int value)
+    {
+        var result = _validator.Validate(new PoliceChaseConfiguration
+        {
+            PursuitNoRouteProbeIntervalMilliseconds = value
+        });
+
+        Assert.That(result.Errors, Has.Some.Property("PropertyName")
+            .EqualTo(nameof(PoliceChaseConfiguration.PursuitNoRouteProbeIntervalMilliseconds)));
     }
 
     [TestCase(-1)]

@@ -15,6 +15,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
     private readonly PoliceChaseConfiguration _configuration;
     private readonly PoliceAiService _policeAiService;
     private readonly PoliceTargetService _targetService;
+    private readonly PolicePursuitTrackingOptions _trackingOptions;
 
     private byte? _activeTargetSessionId;
     private bool _routeTemporarilyLost;
@@ -27,6 +28,11 @@ public sealed class PolicePursuitService : IPolicePursuitService
         _configuration = configuration;
         _policeAiService = policeAiService;
         _targetService = targetService;
+        _trackingOptions = new PolicePursuitTrackingOptions(
+            configuration.PursuitMaxDistanceMeters,
+            configuration.PursuitRouteSearchMaxDistanceMeters,
+            configuration.PursuitRouteSearchMaxVisitedNodes,
+            configuration.PursuitRouteGraceMilliseconds);
     }
 
     public void UpdateOnce()
@@ -57,7 +63,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
 
         var result = state.TrackPursuit(
             targetSessionId.Value,
-            _configuration.PursuitMaxDistanceMeters);
+            _trackingOptions);
 
         switch (result.Status)
         {

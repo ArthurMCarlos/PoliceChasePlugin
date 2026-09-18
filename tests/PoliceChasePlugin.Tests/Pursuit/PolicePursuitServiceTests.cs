@@ -40,7 +40,11 @@ public class PolicePursuitServiceTests
         Assert.Multiple(() =>
         {
             Assert.That(context.State.TrackRequests,
-                Is.EqualTo(new[] { ((byte)10, 1500f) }));
+                Is.EqualTo(new[]
+                {
+                    ((byte)10, new PolicePursuitTrackingOptions(
+                        1500, 20_000, 50_000, 2000))
+                }));
             Assert.That(context.State.SpeedRequests.Single() * 3.6f,
                 Is.EqualTo(45).Within(0.01));
             Assert.That(_sink.Events.Any(e =>

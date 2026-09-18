@@ -8,7 +8,7 @@ internal sealed class FakePoliceAiState : IPoliceAiState
     public bool IsInitialized { get; set; }
     public PolicePursuitTrackingResult NextTrackingResult { get; set; } =
         new(PolicePursuitTrackingStatus.WaitingForSpawn, null, 0);
-    public List<(byte TargetSessionId, float MaxDistanceMeters)> TrackRequests { get; } = new();
+    public List<(byte TargetSessionId, PolicePursuitTrackingOptions Options)> TrackRequests { get; } = new();
     public List<float> SpeedRequests { get; } = new();
     public int ReleaseCount { get; private set; }
 
@@ -19,9 +19,9 @@ internal sealed class FakePoliceAiState : IPoliceAiState
 
     public PolicePursuitTrackingResult TrackPursuit(
         byte targetSessionId,
-        float maxDistanceMeters)
+        PolicePursuitTrackingOptions options)
     {
-        TrackRequests.Add((targetSessionId, maxDistanceMeters));
+        TrackRequests.Add((targetSessionId, options));
         return NextTrackingResult;
     }
 

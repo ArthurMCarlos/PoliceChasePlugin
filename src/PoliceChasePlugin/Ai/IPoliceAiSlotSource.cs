@@ -14,17 +14,47 @@ public enum PolicePursuitTrackingStatus
     TargetUnavailable
 }
 
+public sealed record PolicePursuitTrackingOptions(
+    float MaximumSpatialDistanceMeters,
+    float MaximumRouteDistanceMeters,
+    int MaximumVisitedNodes,
+    int RouteGraceMilliseconds);
+
+public sealed record PolicePursuitJunctionDecision(
+    int JunctionId,
+    bool TakeBranch,
+    int EndPointId);
+
+public enum PolicePursuitRouteUpdateKind
+{
+    Selected,
+    Reused,
+    Extended,
+    Recalculated,
+    Recovered
+}
+
+public sealed record PolicePursuitRouteDiagnostics(
+    long Revision,
+    PolicePursuitRouteUpdateKind UpdateKind,
+    int PolicePointId,
+    int TargetPointId,
+    float RouteDistanceMeters,
+    int VisitedNodes,
+    IReadOnlyList<PolicePursuitJunctionDecision> JunctionDecisions);
+
 public sealed record PolicePursuitTrackingResult(
     PolicePursuitTrackingStatus Status,
     float? RouteDistanceMeters,
-    float TargetSpeedMetersPerSecond);
+    float TargetSpeedMetersPerSecond,
+    PolicePursuitRouteDiagnostics? RouteDiagnostics = null);
 
 public interface IPoliceAiState
 {
     bool IsInitialized { get; }
     PolicePursuitTrackingResult TrackPursuit(
         byte targetSessionId,
-        float maxDistanceMeters);
+        PolicePursuitTrackingOptions options);
     void SetDesiredSpeed(float metersPerSecond);
     void ReleasePursuit();
 }
