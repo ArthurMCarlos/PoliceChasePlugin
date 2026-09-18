@@ -6,6 +6,9 @@ using CoreSearchDiagnostics = AssettoServer.Server.Ai.AiPursuitSearchDiagnostics
 using CoreRejection = AssettoServer.Server.Ai.Routing.AiPursuitTargetRejection;
 using CoreRejectionReason = AssettoServer.Server.Ai.Routing.AiPursuitTargetRejectionReason;
 using CoreSearchFailure = AssettoServer.Server.Ai.Routing.AiRouteSearchFailure;
+using CoreLaneChangeDiagnostics = AssettoServer.Server.Ai.AiPursuitLaneChangeDiagnostics;
+using CoreLaneChangeEventKind = AssettoServer.Server.Ai.AiPursuitLaneChangeEventKind;
+using CoreLaneChangeDirection = AssettoServer.Server.Ai.Routing.AiLaneChangeDirection;
 using PoliceChasePlugin.Ai;
 
 namespace PoliceChasePlugin.Tests.Ai;
@@ -114,6 +117,60 @@ public class AssettoServerPoliceAiStateTests
                 Is.EqualTo(PolicePursuitRouteSearchFailure.DistanceLimit));
             Assert.That(mapped.MaximumExploredDistanceMeters, Is.EqualTo(19_999));
         });
+    }
+
+    [TestCase(CoreLaneChangeEventKind.Required, PolicePursuitLaneChangeEventKind.Required)]
+    [TestCase(CoreLaneChangeEventKind.Waiting, PolicePursuitLaneChangeEventKind.Waiting)]
+    [TestCase(CoreLaneChangeEventKind.Started, PolicePursuitLaneChangeEventKind.Started)]
+    [TestCase(CoreLaneChangeEventKind.Completed, PolicePursuitLaneChangeEventKind.Completed)]
+    [TestCase(CoreLaneChangeEventKind.Cancelled, PolicePursuitLaneChangeEventKind.Cancelled)]
+    [TestCase(CoreLaneChangeEventKind.RouteRevised, PolicePursuitLaneChangeEventKind.RouteRevised)]
+    public void MapsEveryLaneChangeEvent(
+        CoreLaneChangeEventKind core,
+        PolicePursuitLaneChangeEventKind expected)
+    {
+        var mapped = AssettoServerNativePolicePursuitState.MapLaneChangeDiagnostics(
+            new CoreLaneChangeDiagnostics(
+                7,
+                core,
+                100,
+                200,
+                CoreLaneChangeDirection.Left,
+                3,
+                55,
+                "BlockedFront"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(mapped.Revision, Is.EqualTo(7));
+            Assert.That(mapped.EventKind, Is.EqualTo(expected));
+            Assert.That(mapped.FromPointId, Is.EqualTo(100));
+            Assert.That(mapped.ToPointId, Is.EqualTo(200));
+            Assert.That(mapped.Direction, Is.EqualTo(PoliceLaneChangeDirection.Left));
+            Assert.That(mapped.RouteRevision, Is.EqualTo(3));
+            Assert.That(mapped.DistanceToDecisionMeters, Is.EqualTo(55));
+            Assert.That(mapped.BlockingReason, Is.EqualTo("BlockedFront"));
+        });
+    }
+
+    [TestCase(CoreLaneChangeDirection.Left, PoliceLaneChangeDirection.Left)]
+    [TestCase(CoreLaneChangeDirection.Right, PoliceLaneChangeDirection.Right)]
+    public void MapsEveryLaneChangeDirection(
+        CoreLaneChangeDirection core,
+        PoliceLaneChangeDirection expected)
+    {
+        var mapped = AssettoServerNativePolicePursuitState.MapLaneChangeDiagnostics(
+            new CoreLaneChangeDiagnostics(
+                1,
+                CoreLaneChangeEventKind.Required,
+                1,
+                2,
+                core,
+                1,
+                50,
+                null));
+
+        Assert.That(mapped.Direction, Is.EqualTo(expected));
     }
 
     private sealed class FakeNativePolicePursuitState : INativePolicePursuitState

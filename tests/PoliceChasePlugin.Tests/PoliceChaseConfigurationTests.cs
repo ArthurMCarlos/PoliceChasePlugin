@@ -21,6 +21,9 @@ public class PoliceChaseConfigurationTests
             Assert.That(configuration.PursuitRouteSearchMaxVisitedNodes, Is.EqualTo(50_000));
             Assert.That(configuration.PursuitRouteGraceMilliseconds, Is.EqualTo(2_000));
             Assert.That(configuration.PursuitNoRouteProbeIntervalMilliseconds, Is.EqualTo(2_000));
+            Assert.That(configuration.PursuitLaneChangeEnabled, Is.True);
+            Assert.That(configuration.PursuitLaneChangeDistanceMeters, Is.EqualTo(60));
+            Assert.That(configuration.PursuitLaneChangeCooldownMilliseconds, Is.EqualTo(3_000));
         });
     }
 }

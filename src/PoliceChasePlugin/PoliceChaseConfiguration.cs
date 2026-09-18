@@ -17,4 +17,7 @@ public class PoliceChaseConfiguration : IValidateConfiguration<PoliceChaseConfig
     public int PursuitRouteSearchMaxVisitedNodes { get; set; } = 50_000;
     public int PursuitRouteGraceMilliseconds { get; set; } = 2_000;
     public int PursuitNoRouteProbeIntervalMilliseconds { get; set; } = 2_000;
+    public bool PursuitLaneChangeEnabled { get; set; } = true;
+    public float PursuitLaneChangeDistanceMeters { get; set; } = 60;
+    public int PursuitLaneChangeCooldownMilliseconds { get; set; } = 3_000;
 }

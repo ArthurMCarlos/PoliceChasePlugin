@@ -7,6 +7,10 @@ using CoreSearchDiagnostics = AssettoServer.Server.Ai.AiPursuitSearchDiagnostics
 using CoreRouteUpdateKind = AssettoServer.Server.Ai.Routing.AiPursuitRouteUpdateKind;
 using CoreRejectionReason = AssettoServer.Server.Ai.Routing.AiPursuitTargetRejectionReason;
 using CoreSearchFailure = AssettoServer.Server.Ai.Routing.AiRouteSearchFailure;
+using CoreLaneChangeOptions = AssettoServer.Server.Ai.AiPursuitLaneChangeOptions;
+using CoreLaneChangeDiagnostics = AssettoServer.Server.Ai.AiPursuitLaneChangeDiagnostics;
+using CoreLaneChangeEventKind = AssettoServer.Server.Ai.AiPursuitLaneChangeEventKind;
+using CoreLaneChangeDirection = AssettoServer.Server.Ai.Routing.AiLaneChangeDirection;
 
 namespace PoliceChasePlugin.Ai;
 
@@ -52,7 +56,13 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             options.MaximumSpatialDistanceMeters,
             options.MaximumRouteDistanceMeters,
             options.MaximumVisitedNodes,
-            options.RouteGraceMilliseconds));
+            options.RouteGraceMilliseconds,
+            options.LaneChange == null
+                ? null
+                : new CoreLaneChangeOptions(
+                    options.LaneChange.Enabled,
+                    options.LaneChange.DistanceMeters,
+                    options.LaneChange.CooldownMilliseconds)));
         return new PolicePursuitTrackingResult(
             MapStatus(result.Status),
             result.RouteDistanceMeters,
@@ -62,7 +72,10 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
                 : MapDiagnostics(result.RouteDiagnostics),
             result.SearchDiagnostics == null
                 ? null
-                : MapSearchDiagnostics(result.SearchDiagnostics));
+                : MapSearchDiagnostics(result.SearchDiagnostics),
+            result.LaneChangeDiagnostics == null
+                ? null
+                : MapLaneChangeDiagnostics(result.LaneChangeDiagnostics));
     }
 
     public void SetDesiredSpeed(float metersPerSecond) =>
@@ -116,6 +129,40 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             diagnostics.VisitedNodes,
             diagnostics.MaximumExploredDistanceMeters,
             diagnostics.JunctionEdgesExamined);
+
+    internal static PolicePursuitLaneChangeDiagnostics MapLaneChangeDiagnostics(
+        CoreLaneChangeDiagnostics diagnostics) =>
+        new(
+            diagnostics.Revision,
+            MapLaneChangeEventKind(diagnostics.EventKind),
+            diagnostics.FromPointId,
+            diagnostics.ToPointId,
+            MapLaneChangeDirection(diagnostics.Direction),
+            diagnostics.RouteRevision,
+            diagnostics.DistanceToDecisionMeters,
+            diagnostics.BlockingReason);
+
+    private static PolicePursuitLaneChangeEventKind MapLaneChangeEventKind(
+        CoreLaneChangeEventKind eventKind) =>
+        eventKind switch
+        {
+            CoreLaneChangeEventKind.Required => PolicePursuitLaneChangeEventKind.Required,
+            CoreLaneChangeEventKind.Waiting => PolicePursuitLaneChangeEventKind.Waiting,
+            CoreLaneChangeEventKind.Started => PolicePursuitLaneChangeEventKind.Started,
+            CoreLaneChangeEventKind.Completed => PolicePursuitLaneChangeEventKind.Completed,
+            CoreLaneChangeEventKind.Cancelled => PolicePursuitLaneChangeEventKind.Cancelled,
+            CoreLaneChangeEventKind.RouteRevised => PolicePursuitLaneChangeEventKind.RouteRevised,
+            _ => throw new ArgumentOutOfRangeException(nameof(eventKind), eventKind, null)
+        };
+
+    private static PoliceLaneChangeDirection MapLaneChangeDirection(
+        CoreLaneChangeDirection direction) =>
+        direction switch
+        {
+            CoreLaneChangeDirection.Left => PoliceLaneChangeDirection.Left,
+            CoreLaneChangeDirection.Right => PoliceLaneChangeDirection.Right,
+            _ => throw new ArgumentOutOfRangeException(nameof(direction), direction, null)
+        };
 
     private static PolicePursuitTargetRejectionReason MapRejectionReason(
         CoreRejectionReason reason) =>

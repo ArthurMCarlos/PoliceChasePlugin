@@ -22,6 +22,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
     private byte? _suspendedTargetSessionId;
     private long _lastNoRouteProbeTimestamp;
     private long? _lastLoggedRouteRevision;
+    private long? _lastLoggedLaneChangeRevision;
     private readonly Dictionary<int, bool> _loggedJunctionDecisions = new();
     private bool _routeTemporarilyLost;
 
@@ -39,7 +40,11 @@ public sealed class PolicePursuitService : IPolicePursuitService
             configuration.PursuitMaxDistanceMeters,
             configuration.PursuitRouteSearchMaxDistanceMeters,
             configuration.PursuitRouteSearchMaxVisitedNodes,
-            configuration.PursuitRouteGraceMilliseconds);
+            configuration.PursuitRouteGraceMilliseconds,
+            new PolicePursuitLaneChangeOptions(
+                configuration.PursuitLaneChangeEnabled,
+                configuration.PursuitLaneChangeDistanceMeters,
+                configuration.PursuitLaneChangeCooldownMilliseconds));
     }
 
     public void UpdateOnce()
@@ -180,6 +185,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
             result.RouteDiagnostics,
             result.SearchDiagnostics,
             starting);
+        LogLaneChangeTransition(targetSessionId, result.LaneChangeDiagnostics);
         var desiredSpeed = PolicePursuitSpeedPolicy.Calculate(
             result.TargetSpeedMetersPerSecond,
             result.RouteDistanceMeters.Value,
@@ -243,7 +249,74 @@ public sealed class PolicePursuitService : IPolicePursuitService
     private void ResetRouteDiagnostics()
     {
         _lastLoggedRouteRevision = null;
+        _lastLoggedLaneChangeRevision = null;
         _loggedJunctionDecisions.Clear();
+    }
+
+    private void LogLaneChangeTransition(
+        byte targetSessionId,
+        PolicePursuitLaneChangeDiagnostics? diagnostics)
+    {
+        if (diagnostics == null || _lastLoggedLaneChangeRevision == diagnostics.Revision)
+            return;
+
+        switch (diagnostics.EventKind)
+        {
+            case PolicePursuitLaneChangeEventKind.Required:
+                Log.Information(
+                    "[PoliceChase] Lane change required: target {TargetSessionId}, from {FromPointId}, to {ToPointId}, direction {Direction}, distanceToDecision {DistanceToDecisionMeters:0.0}",
+                    targetSessionId,
+                    diagnostics.FromPointId,
+                    diagnostics.ToPointId,
+                    diagnostics.Direction,
+                    diagnostics.DistanceToDecisionMeters);
+                break;
+            case PolicePursuitLaneChangeEventKind.Waiting:
+                Log.Information(
+                    "[PoliceChase] Lane change waiting: target {TargetSessionId}, from {FromPointId}, to {ToPointId}, direction {Direction}, reason {BlockingReason}",
+                    targetSessionId,
+                    diagnostics.FromPointId,
+                    diagnostics.ToPointId,
+                    diagnostics.Direction,
+                    diagnostics.BlockingReason);
+                break;
+            case PolicePursuitLaneChangeEventKind.Started:
+                Log.Information(
+                    "[PoliceChase] Lane change started: target {TargetSessionId}, from {FromPointId}, to {ToPointId}, direction {Direction}",
+                    targetSessionId,
+                    diagnostics.FromPointId,
+                    diagnostics.ToPointId,
+                    diagnostics.Direction);
+                break;
+            case PolicePursuitLaneChangeEventKind.Completed:
+                Log.Information(
+                    "[PoliceChase] Lane change completed: target {TargetSessionId}, destination {ToPointId}, routeRevision {RouteRevision}",
+                    targetSessionId,
+                    diagnostics.ToPointId,
+                    diagnostics.RouteRevision);
+                break;
+            case PolicePursuitLaneChangeEventKind.Cancelled:
+                Log.Information(
+                    "[PoliceChase] Lane change cancelled: target {TargetSessionId}, from {FromPointId}, to {ToPointId}, routeRevision {RouteRevision}",
+                    targetSessionId,
+                    diagnostics.FromPointId,
+                    diagnostics.ToPointId,
+                    diagnostics.RouteRevision);
+                break;
+            case PolicePursuitLaneChangeEventKind.RouteRevised:
+                Log.Information(
+                    "[PoliceChase] Lane change route revised: target {TargetSessionId}, from {FromPointId}, to {ToPointId}, routeRevision {RouteRevision}",
+                    targetSessionId,
+                    diagnostics.FromPointId,
+                    diagnostics.ToPointId,
+                    diagnostics.RouteRevision);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(diagnostics.EventKind), diagnostics.EventKind, null);
+        }
+
+        _lastLoggedLaneChangeRevision = diagnostics.Revision;
     }
 
     private void LogRouteTransitions(

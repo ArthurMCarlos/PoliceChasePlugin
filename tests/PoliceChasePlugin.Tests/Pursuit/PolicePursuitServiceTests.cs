@@ -43,7 +43,8 @@ public class PolicePursuitServiceTests
                 Is.EqualTo(new[]
                 {
                     ((byte)10, new PolicePursuitTrackingOptions(
-                        1500, 20_000, 50_000, 2000))
+                        1500, 20_000, 50_000, 2000,
+                        new PolicePursuitLaneChangeOptions(true, 60, 3000)))
                 }));
             Assert.That(context.State.SpeedRequests.Single() * 3.6f,
                 Is.EqualTo(45).Within(0.01));
@@ -324,8 +325,57 @@ public class PolicePursuitServiceTests
         });
     }
 
+    [Test]
+    public void LaneChangeEventsLogOnlyOncePerRevision()
+    {
+        var context = CreateContext();
+        var required = ActiveResult(laneChange: new PolicePursuitLaneChangeDiagnostics(
+            1,
+            PolicePursuitLaneChangeEventKind.Required,
+            100,
+            101,
+            PoliceLaneChangeDirection.Left,
+            4,
+            55,
+            null));
+        var waiting = ActiveResult(laneChange: new PolicePursuitLaneChangeDiagnostics(
+            2,
+            PolicePursuitLaneChangeEventKind.Waiting,
+            100,
+            101,
+            PoliceLaneChangeDirection.Left,
+            4,
+            54,
+            "BlockedRearClosing"));
+        context.State.Enqueue(required);
+        context.State.Enqueue(required);
+        context.State.Enqueue(waiting);
+        context.State.Enqueue(waiting);
+
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(LogCount("Lane change required"), Is.EqualTo(1));
+            Assert.That(LogCount("Lane change waiting"), Is.EqualTo(1));
+            Assert.That(_sink.Events.Any(e =>
+                e.RenderMessage().Contains("BlockedRearClosing")), Is.True);
+        });
+    }
+
     private static PolicePursuitTrackingResult ActiveResult() =>
         new(PolicePursuitTrackingStatus.Active, 150, 20 / 3.6f);
+
+    private static PolicePursuitTrackingResult ActiveResult(
+        PolicePursuitLaneChangeDiagnostics laneChange) =>
+        new(
+            PolicePursuitTrackingStatus.Active,
+            150,
+            20 / 3.6f,
+            LaneChangeDiagnostics: laneChange);
 
     private static PolicePursuitTrackingResult ActiveResult(
         long revision,

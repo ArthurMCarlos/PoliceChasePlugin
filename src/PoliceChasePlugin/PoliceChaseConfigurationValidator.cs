@@ -31,5 +31,10 @@ public class PoliceChaseConfigurationValidator : AbstractValidator<PoliceChaseCo
             .GreaterThan(0);
         RuleFor(configuration => configuration.PursuitNoRouteProbeIntervalMilliseconds)
             .GreaterThan(0);
+        RuleFor(configuration => configuration.PursuitLaneChangeDistanceMeters)
+            .Must(float.IsFinite)
+            .InclusiveBetween(20, 200);
+        RuleFor(configuration => configuration.PursuitLaneChangeCooldownMilliseconds)
+            .InclusiveBetween(0, 30_000);
     }
 }

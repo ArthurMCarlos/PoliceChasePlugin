@@ -18,7 +18,39 @@ public sealed record PolicePursuitTrackingOptions(
     float MaximumSpatialDistanceMeters,
     float MaximumRouteDistanceMeters,
     int MaximumVisitedNodes,
-    int RouteGraceMilliseconds);
+    int RouteGraceMilliseconds,
+    PolicePursuitLaneChangeOptions? LaneChange = null);
+
+public sealed record PolicePursuitLaneChangeOptions(
+    bool Enabled,
+    float DistanceMeters,
+    int CooldownMilliseconds);
+
+public enum PolicePursuitLaneChangeEventKind
+{
+    Required,
+    Waiting,
+    Started,
+    Completed,
+    Cancelled,
+    RouteRevised
+}
+
+public enum PoliceLaneChangeDirection
+{
+    Left,
+    Right
+}
+
+public sealed record PolicePursuitLaneChangeDiagnostics(
+    long Revision,
+    PolicePursuitLaneChangeEventKind EventKind,
+    int FromPointId,
+    int ToPointId,
+    PoliceLaneChangeDirection Direction,
+    long RouteRevision,
+    float? DistanceToDecisionMeters,
+    string? BlockingReason);
 
 public sealed record PolicePursuitJunctionDecision(
     int JunctionId,
@@ -81,7 +113,8 @@ public sealed record PolicePursuitTrackingResult(
     float? RouteDistanceMeters,
     float TargetSpeedMetersPerSecond,
     PolicePursuitRouteDiagnostics? RouteDiagnostics = null,
-    PolicePursuitSearchDiagnostics? SearchDiagnostics = null);
+    PolicePursuitSearchDiagnostics? SearchDiagnostics = null,
+    PolicePursuitLaneChangeDiagnostics? LaneChangeDiagnostics = null);
 
 public interface IPoliceAiState
 {
