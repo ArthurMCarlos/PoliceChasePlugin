@@ -16,18 +16,25 @@ public sealed class PolicePursuitService : IPolicePursuitService
     private readonly PoliceAiService _policeAiService;
     private readonly PoliceTargetService _targetService;
     private readonly PolicePursuitTrackingOptions _trackingOptions;
+    private readonly TimeProvider _timeProvider;
 
     private byte? _activeTargetSessionId;
+    private byte? _suspendedTargetSessionId;
+    private long _lastNoRouteProbeTimestamp;
+    private long? _lastLoggedRouteRevision;
+    private readonly Dictionary<int, bool> _loggedJunctionDecisions = new();
     private bool _routeTemporarilyLost;
 
     public PolicePursuitService(
         PoliceChaseConfiguration configuration,
         PoliceAiService policeAiService,
-        PoliceTargetService targetService)
+        PoliceTargetService targetService,
+        TimeProvider? timeProvider = null)
     {
         _configuration = configuration;
         _policeAiService = policeAiService;
         _targetService = targetService;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _trackingOptions = new PolicePursuitTrackingOptions(
             configuration.PursuitMaxDistanceMeters,
             configuration.PursuitRouteSearchMaxDistanceMeters,
@@ -37,21 +44,12 @@ public sealed class PolicePursuitService : IPolicePursuitService
 
     public void UpdateOnce()
     {
-        var state = _policeAiService.SelectedState;
         var targetSessionId = _targetService.CurrentTargetSessionId;
-
-        if (state == null)
-            return;
-
-        if (!state.IsInitialized)
-        {
-            ReleaseInternal("police-state-uninitialized");
-            return;
-        }
 
         if (!targetSessionId.HasValue)
         {
             ReleaseInternal("target-disconnected");
+            ClearSuspension();
             return;
         }
 
@@ -61,6 +59,30 @@ public sealed class PolicePursuitService : IPolicePursuitService
             ReleaseInternal("target-changed");
         }
 
+        if (_suspendedTargetSessionId.HasValue
+            && _suspendedTargetSessionId.Value != targetSessionId.Value)
+        {
+            ClearSuspension();
+            ResetRouteDiagnostics();
+        }
+
+        var state = _policeAiService.SelectedState;
+        if (state == null)
+            return;
+
+        if (!state.IsInitialized)
+        {
+            ReleaseInternal("police-state-uninitialized");
+            return;
+        }
+
+        var probing = _suspendedTargetSessionId == targetSessionId.Value;
+        if (probing && !IsProbeDue())
+            return;
+
+        if (probing)
+            _lastNoRouteProbeTimestamp = _timeProvider.GetTimestamp();
+
         var result = state.TrackPursuit(
             targetSessionId.Value,
             _trackingOptions);
@@ -68,6 +90,13 @@ public sealed class PolicePursuitService : IPolicePursuitService
         switch (result.Status)
         {
             case PolicePursuitTrackingStatus.Active:
+                if (probing)
+                {
+                    Log.Information(
+                        "[PoliceChase] Pursuit route probe succeeded: target {TargetSessionId}",
+                        targetSessionId.Value);
+                    ClearSuspension();
+                }
                 HandleActive(state, targetSessionId.Value, result);
                 break;
             case PolicePursuitTrackingStatus.RouteTemporarilyUnavailable:
@@ -77,12 +106,16 @@ public sealed class PolicePursuitService : IPolicePursuitService
                 break;
             case PolicePursuitTrackingStatus.MaxDistanceExceeded:
                 ReleaseInternal("max-distance-exceeded");
+                ClearSuspension();
                 break;
             case PolicePursuitTrackingStatus.NoRoute:
-                ReleaseInternal("no-route");
+                if (_activeTargetSessionId.HasValue)
+                    ReleaseInternal("no-route");
+                Suspend(targetSessionId.Value);
                 break;
             case PolicePursuitTrackingStatus.TargetUnavailable:
                 ReleaseInternal("target-unavailable");
+                ClearSuspension();
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(result.Status), result.Status, null);
@@ -103,6 +136,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
     public void Release()
     {
         ReleaseInternal("service-stopping");
+        ClearSuspension();
     }
 
     private void HandleActive(
@@ -114,6 +148,8 @@ public sealed class PolicePursuitService : IPolicePursuitService
             throw new InvalidOperationException("Active pursuit requires a route distance");
 
         var starting = !_activeTargetSessionId.HasValue;
+        if (starting)
+            ResetRouteDiagnostics();
         _activeTargetSessionId = targetSessionId;
 
         if (starting)
@@ -131,6 +167,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
         }
 
         _routeTemporarilyLost = false;
+        LogRouteTransitions(targetSessionId, result.RouteDiagnostics, starting);
         var desiredSpeed = PolicePursuitSpeedPolicy.Calculate(
             result.TargetSpeedMetersPerSecond,
             result.RouteDistanceMeters.Value,
@@ -163,9 +200,98 @@ public sealed class PolicePursuitService : IPolicePursuitService
         _policeAiService.SelectedState?.ReleasePursuit();
         _activeTargetSessionId = null;
         _routeTemporarilyLost = false;
+        ResetRouteDiagnostics();
         Log.Information(
             "[PoliceChase] Pursuit ended: target {TargetSessionId}, reason {Reason}",
             targetSessionId,
             reason);
+    }
+
+    private bool IsProbeDue()
+    {
+        var elapsed = _timeProvider.GetElapsedTime(
+            _lastNoRouteProbeTimestamp,
+            _timeProvider.GetTimestamp());
+        return elapsed >= TimeSpan.FromMilliseconds(
+            _configuration.PursuitNoRouteProbeIntervalMilliseconds);
+    }
+
+    private void Suspend(byte targetSessionId)
+    {
+        _suspendedTargetSessionId = targetSessionId;
+        _lastNoRouteProbeTimestamp = _timeProvider.GetTimestamp();
+    }
+
+    private void ClearSuspension()
+    {
+        _suspendedTargetSessionId = null;
+        _lastNoRouteProbeTimestamp = 0;
+    }
+
+    private void ResetRouteDiagnostics()
+    {
+        _lastLoggedRouteRevision = null;
+        _loggedJunctionDecisions.Clear();
+    }
+
+    private void LogRouteTransitions(
+        byte targetSessionId,
+        PolicePursuitRouteDiagnostics? diagnostics,
+        bool starting)
+    {
+        if (diagnostics == null || _lastLoggedRouteRevision == diagnostics.Revision)
+            return;
+
+        if (starting || diagnostics.UpdateKind == PolicePursuitRouteUpdateKind.Selected)
+        {
+            Log.Information(
+                "[PoliceChase] Pursuit route selected: police {PoliceSessionId}, target {TargetSessionId}, policePoint {PolicePointId}, targetPoint {TargetPointId}, distance {RouteDistanceMeters:0.0}, junctions {JunctionCount}",
+                _policeAiService.SelectedSlot?.SessionId,
+                targetSessionId,
+                diagnostics.PolicePointId,
+                diagnostics.TargetPointId,
+                diagnostics.RouteDistanceMeters,
+                diagnostics.JunctionDecisions.Count);
+        }
+        else if (diagnostics.UpdateKind is PolicePursuitRouteUpdateKind.Recalculated
+                 or PolicePursuitRouteUpdateKind.Recovered)
+        {
+            Log.Information(
+                "[PoliceChase] Pursuit route recalculated: target {TargetSessionId}, revision {Revision}, policePoint {PolicePointId}, targetPoint {TargetPointId}, distance {RouteDistanceMeters:0.0}",
+                targetSessionId,
+                diagnostics.Revision,
+                diagnostics.PolicePointId,
+                diagnostics.TargetPointId,
+                diagnostics.RouteDistanceMeters);
+        }
+
+        var currentJunctionIds = diagnostics.JunctionDecisions
+            .Select(decision => decision.JunctionId)
+            .ToHashSet();
+        foreach (var expired in _loggedJunctionDecisions.Keys
+                     .Where(junctionId => !currentJunctionIds.Contains(junctionId))
+                     .ToArray())
+        {
+            _loggedJunctionDecisions.Remove(expired);
+        }
+
+        foreach (var decision in diagnostics.JunctionDecisions)
+        {
+            if (_loggedJunctionDecisions.TryGetValue(decision.JunctionId, out var previous)
+                && previous == decision.TakeBranch)
+            {
+                continue;
+            }
+
+            _loggedJunctionDecisions[decision.JunctionId] = decision.TakeBranch;
+            Log.Information(
+                "[PoliceChase] Pursuit junction decision: target {TargetSessionId}, junction {JunctionId}, takeBranch {TakeBranch}, endPoint {EndPointId}",
+                targetSessionId,
+                decision.JunctionId,
+                decision.TakeBranch,
+                decision.EndPointId);
+        }
+
+        _lastLoggedRouteRevision = diagnostics.Revision;
     }
 }

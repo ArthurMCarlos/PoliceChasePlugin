@@ -199,8 +199,103 @@ public class PolicePursuitServiceTests
         Assert.That(context.State.ReleaseCount, Is.EqualTo(1));
     }
 
+    [Test]
+    public void NoRouteSuspendsSameTargetUntilProbeFindsRoute()
+    {
+        var context = CreateContext();
+        context.State.Enqueue(ActiveResult(revision: 1));
+        context.State.Enqueue(new PolicePursuitTrackingResult(
+            PolicePursuitTrackingStatus.NoRoute, null, 0));
+        context.State.Enqueue(ActiveResult(revision: 2));
+
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+        context.Clock.AdvanceMilliseconds(1999);
+        context.Service.UpdateOnce();
+        context.Clock.AdvanceMilliseconds(1);
+        context.Service.UpdateOnce();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(context.State.TrackRequests, Has.Count.EqualTo(3));
+            Assert.That(LogCount("Pursuit started"), Is.EqualTo(2));
+            Assert.That(LogCount("Pursuit ended"), Is.EqualTo(1));
+            Assert.That(LogCount("route probe succeeded"), Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public void FailedProbeDoesNotRestartOrLogAnotherEnd()
+    {
+        var context = CreateContext();
+        context.State.Enqueue(ActiveResult(revision: 1));
+        context.State.Enqueue(new PolicePursuitTrackingResult(
+            PolicePursuitTrackingStatus.NoRoute, null, 0));
+        context.State.Enqueue(new PolicePursuitTrackingResult(
+            PolicePursuitTrackingStatus.NoRoute, null, 0));
+
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+        context.Clock.AdvanceMilliseconds(2000);
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(context.State.TrackRequests, Has.Count.EqualTo(3));
+            Assert.That(LogCount("Pursuit started"), Is.EqualTo(1));
+            Assert.That(LogCount("Pursuit ended"), Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public void RouteRevisionAndJunctionDecisionsLogOnlyOnTransitions()
+    {
+        var context = CreateContext();
+        var selected = ActiveResult(
+            revision: 1,
+            PolicePursuitRouteUpdateKind.Selected,
+            [new PolicePursuitJunctionDecision(7, true, 300)]);
+        var recalculated = ActiveResult(
+            revision: 2,
+            PolicePursuitRouteUpdateKind.Recalculated,
+            [new PolicePursuitJunctionDecision(7, true, 300)]);
+        context.State.Enqueue(selected);
+        context.State.Enqueue(selected);
+        context.State.Enqueue(recalculated);
+
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(LogCount("Pursuit route selected"), Is.EqualTo(1));
+            Assert.That(LogCount("Pursuit route recalculated"), Is.EqualTo(1));
+            Assert.That(LogCount("Pursuit junction decision"), Is.EqualTo(1));
+        });
+    }
+
     private static PolicePursuitTrackingResult ActiveResult() =>
         new(PolicePursuitTrackingStatus.Active, 150, 20 / 3.6f);
+
+    private static PolicePursuitTrackingResult ActiveResult(
+        long revision,
+        PolicePursuitRouteUpdateKind updateKind = PolicePursuitRouteUpdateKind.Selected,
+        IReadOnlyList<PolicePursuitJunctionDecision>? decisions = null) =>
+        new(
+            PolicePursuitTrackingStatus.Active,
+            150,
+            20 / 3.6f,
+            new PolicePursuitRouteDiagnostics(
+                revision,
+                updateKind,
+                100,
+                200,
+                150,
+                12,
+                decisions ?? []));
 
     private static TestContext CreateContext(bool policeInitialized = true)
     {
@@ -221,14 +316,31 @@ public class PolicePursuitServiceTests
         var targetService = new PoliceTargetService(playerSource);
         targetService.Start();
 
+        var clock = new ManualTimeProvider();
         return new TestContext(
-            new PolicePursuitService(configuration, aiService, targetService),
+            new PolicePursuitService(configuration, aiService, targetService, clock),
             state,
-            playerSource);
+            playerSource,
+            clock);
     }
+
+    private int LogCount(string text) =>
+        _sink.Events.Count(logEvent => logEvent.RenderMessage().Contains(text));
 
     private sealed record TestContext(
         PolicePursuitService Service,
         FakePoliceAiState State,
-        FakePolicePlayerSource PlayerSource);
+        FakePolicePlayerSource PlayerSource,
+        ManualTimeProvider Clock);
+
+    private sealed class ManualTimeProvider : TimeProvider
+    {
+        private long _timestamp;
+
+        public override long TimestampFrequency => 1000;
+        public override long GetTimestamp() => _timestamp;
+
+        public void AdvanceMilliseconds(long milliseconds) =>
+            _timestamp += milliseconds;
+    }
 }
