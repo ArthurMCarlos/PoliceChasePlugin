@@ -3,7 +3,33 @@ using PoliceChasePlugin.Ai;
 
 namespace PoliceChasePlugin.Tests.Ai;
 
-internal sealed record FakePoliceAiState(bool IsInitialized) : IPoliceAiState;
+internal sealed class FakePoliceAiState : IPoliceAiState
+{
+    public bool IsInitialized { get; }
+    public PolicePursuitTrackingResult NextTrackingResult { get; set; } =
+        new(PolicePursuitTrackingStatus.WaitingForSpawn, null, 0);
+    public List<(byte TargetSessionId, float MaxDistanceMeters)> TrackRequests { get; } = new();
+    public List<float> SpeedRequests { get; } = new();
+    public int ReleaseCount { get; private set; }
+
+    public FakePoliceAiState(bool isInitialized)
+    {
+        IsInitialized = isInitialized;
+    }
+
+    public PolicePursuitTrackingResult TrackPursuit(
+        byte targetSessionId,
+        float maxDistanceMeters)
+    {
+        TrackRequests.Add((targetSessionId, maxDistanceMeters));
+        return NextTrackingResult;
+    }
+
+    public void SetDesiredSpeed(float metersPerSecond) =>
+        SpeedRequests.Add(metersPerSecond);
+
+    public void ReleasePursuit() => ReleaseCount++;
+}
 
 internal sealed class FakePoliceAiSlotSource : IPoliceAiSlotSource
 {
