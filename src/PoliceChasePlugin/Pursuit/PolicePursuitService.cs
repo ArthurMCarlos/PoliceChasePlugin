@@ -100,7 +100,9 @@ public sealed class PolicePursuitService : IPolicePursuitService
                 HandleActive(state, targetSessionId.Value, result);
                 break;
             case PolicePursuitTrackingStatus.RouteTemporarilyUnavailable:
-                HandleTemporaryRouteLoss(targetSessionId.Value);
+                HandleTemporaryRouteLoss(
+                    targetSessionId.Value,
+                    result.SearchDiagnostics);
                 break;
             case PolicePursuitTrackingStatus.WaitingForSpawn:
                 break;
@@ -110,7 +112,13 @@ public sealed class PolicePursuitService : IPolicePursuitService
                 break;
             case PolicePursuitTrackingStatus.NoRoute:
                 if (_activeTargetSessionId.HasValue)
+                {
+                    LogSearchFailure(
+                        "definitive",
+                        targetSessionId.Value,
+                        result.SearchDiagnostics);
                     ReleaseInternal("no-route");
+                }
                 Suspend(targetSessionId.Value);
                 break;
             case PolicePursuitTrackingStatus.TargetUnavailable:
@@ -167,7 +175,11 @@ public sealed class PolicePursuitService : IPolicePursuitService
         }
 
         _routeTemporarilyLost = false;
-        LogRouteTransitions(targetSessionId, result.RouteDiagnostics, starting);
+        LogRouteTransitions(
+            targetSessionId,
+            result.RouteDiagnostics,
+            result.SearchDiagnostics,
+            starting);
         var desiredSpeed = PolicePursuitSpeedPolicy.Calculate(
             result.TargetSpeedMetersPerSecond,
             result.RouteDistanceMeters.Value,
@@ -176,16 +188,16 @@ public sealed class PolicePursuitService : IPolicePursuitService
         state.SetDesiredSpeed(desiredSpeed);
     }
 
-    private void HandleTemporaryRouteLoss(byte targetSessionId)
+    private void HandleTemporaryRouteLoss(
+        byte targetSessionId,
+        PolicePursuitSearchDiagnostics? diagnostics)
     {
         if (!_activeTargetSessionId.HasValue)
             return;
 
         if (!_routeTemporarilyLost)
         {
-            Log.Information(
-                "[PoliceChase] Pursuit route temporarily lost: target {TargetSessionId}",
-                targetSessionId);
+            LogSearchFailure("temporarily lost", targetSessionId, diagnostics);
         }
 
         _routeTemporarilyLost = true;
@@ -237,6 +249,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
     private void LogRouteTransitions(
         byte targetSessionId,
         PolicePursuitRouteDiagnostics? diagnostics,
+        PolicePursuitSearchDiagnostics? searchDiagnostics,
         bool starting)
     {
         if (diagnostics == null || _lastLoggedRouteRevision == diagnostics.Revision)
@@ -292,6 +305,63 @@ public sealed class PolicePursuitService : IPolicePursuitService
                 decision.EndPointId);
         }
 
+        if (searchDiagnostics != null)
+        {
+            Log.Information(
+                "[PoliceChase] Pursuit route candidates: target {TargetSessionId}, policePoint {PolicePointId}, previousTargetPoint {PreviousTargetPointId}, selectedTargetPoint {SelectedTargetPointId}, spatialCandidates {SpatialPointIds}, laneEquivalents {LaneEquivalentPointIds}, rejected {RejectedCandidates}, searchFailure {SearchFailure}, visitedNodes {VisitedNodes}, exploredDistance {MaximumExploredDistanceMeters:0.0}, junctionEdges {JunctionEdgesExamined}",
+                targetSessionId,
+                searchDiagnostics.PolicePointId,
+                searchDiagnostics.PreviousTargetPointId,
+                searchDiagnostics.SelectedTargetPointId,
+                FormatPointIds(searchDiagnostics.SpatialPointIds),
+                FormatPointIds(searchDiagnostics.LaneEquivalentPointIds),
+                FormatRejections(searchDiagnostics.Rejections),
+                searchDiagnostics.SearchFailure,
+                searchDiagnostics.VisitedNodes,
+                searchDiagnostics.MaximumExploredDistanceMeters,
+                searchDiagnostics.JunctionEdgesExamined);
+        }
+
         _lastLoggedRouteRevision = diagnostics.Revision;
     }
+
+    private static void LogSearchFailure(
+        string transition,
+        byte targetSessionId,
+        PolicePursuitSearchDiagnostics? diagnostics)
+    {
+        if (diagnostics == null)
+        {
+            Log.Information(
+                "[PoliceChase] Pursuit route {Transition:l}: target {TargetSessionId}, diagnostics unavailable",
+                transition,
+                targetSessionId);
+            return;
+        }
+
+        Log.Information(
+            "[PoliceChase] Pursuit route {Transition:l}: target {TargetSessionId}, policePoint {PolicePointId}, previousTargetPoint {PreviousTargetPointId}, selectedTargetPoint {SelectedTargetPointId}, spatialCandidates {SpatialPointIds}, laneEquivalents {LaneEquivalentPointIds}, rejected {RejectedCandidates}, searchFailure {SearchFailure}, visitedNodes {VisitedNodes}, exploredDistance {MaximumExploredDistanceMeters:0.0}, junctionEdges {JunctionEdgesExamined}",
+            transition,
+            targetSessionId,
+            diagnostics.PolicePointId,
+            diagnostics.PreviousTargetPointId,
+            diagnostics.SelectedTargetPointId,
+            FormatPointIds(diagnostics.SpatialPointIds),
+            FormatPointIds(diagnostics.LaneEquivalentPointIds),
+            FormatRejections(diagnostics.Rejections),
+            diagnostics.SearchFailure,
+            diagnostics.VisitedNodes,
+            diagnostics.MaximumExploredDistanceMeters,
+            diagnostics.JunctionEdgesExamined);
+    }
+
+    private static string FormatPointIds(IReadOnlyList<int> pointIds) =>
+        pointIds.Count == 0 ? "[]" : $"[{string.Join(",", pointIds)}]";
+
+    private static string FormatRejections(
+        IReadOnlyList<PolicePursuitTargetRejection> rejections) =>
+        rejections.Count == 0
+            ? "[]"
+            : $"[{string.Join(",", rejections.Select(rejection =>
+                $"{rejection.PointId}:{rejection.Reason}"))}]";
 }

@@ -2,6 +2,10 @@ using CoreStatus = AssettoServer.Server.Ai.AiPursuitTrackingStatus;
 using CoreUpdateKind = AssettoServer.Server.Ai.Routing.AiPursuitRouteUpdateKind;
 using CoreDiagnostics = AssettoServer.Server.Ai.AiPursuitRouteDiagnostics;
 using CoreDecision = AssettoServer.Server.Ai.AiPursuitJunctionDecision;
+using CoreSearchDiagnostics = AssettoServer.Server.Ai.AiPursuitSearchDiagnostics;
+using CoreRejection = AssettoServer.Server.Ai.Routing.AiPursuitTargetRejection;
+using CoreRejectionReason = AssettoServer.Server.Ai.Routing.AiPursuitTargetRejectionReason;
+using CoreSearchFailure = AssettoServer.Server.Ai.Routing.AiRouteSearchFailure;
 using PoliceChasePlugin.Ai;
 
 namespace PoliceChasePlugin.Tests.Ai;
@@ -71,6 +75,44 @@ public class AssettoServerPoliceAiStateTests
             Assert.That(mapped.VisitedNodes, Is.EqualTo(42));
             Assert.That(mapped.JunctionDecisions,
                 Is.EqualTo(new[] { new PolicePursuitJunctionDecision(7, true, 300) }));
+        });
+    }
+
+    [Test]
+    public void MapsCoreSearchDiagnosticsWithoutLosingEvidence()
+    {
+        var core = new CoreSearchDiagnostics(
+            PolicePointId: 171036,
+            PreviousTargetPointId: 171048,
+            SelectedTargetPointId: null,
+            SpatialPointIds: [227470, 57704],
+            LaneEquivalentPointIds: [171048],
+            Rejections:
+            [
+                new CoreRejection(
+                    265571,
+                    CoreRejectionReason.OppositeDirection)
+            ],
+            SearchFailure: CoreSearchFailure.DistanceLimit,
+            VisitedNodes: 1234,
+            MaximumExploredDistanceMeters: 19_999,
+            JunctionEdgesExamined: 2);
+
+        var mapped = AssettoServerNativePolicePursuitState.MapSearchDiagnostics(core);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(mapped.PolicePointId, Is.EqualTo(171036));
+            Assert.That(mapped.PreviousTargetPointId, Is.EqualTo(171048));
+            Assert.That(mapped.SpatialPointIds, Is.EqualTo(new[] { 227470, 57704 }));
+            Assert.That(mapped.LaneEquivalentPointIds, Is.EqualTo(new[] { 171048 }));
+            Assert.That(mapped.Rejections.Single(), Is.EqualTo(
+                new PolicePursuitTargetRejection(
+                    265571,
+                    PolicePursuitTargetRejectionReason.OppositeDirection)));
+            Assert.That(mapped.SearchFailure,
+                Is.EqualTo(PolicePursuitRouteSearchFailure.DistanceLimit));
+            Assert.That(mapped.MaximumExploredDistanceMeters, Is.EqualTo(19_999));
         });
     }
 

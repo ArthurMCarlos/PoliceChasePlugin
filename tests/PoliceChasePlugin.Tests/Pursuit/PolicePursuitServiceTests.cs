@@ -90,6 +90,53 @@ public class PolicePursuitServiceTests
     }
 
     [Test]
+    public void TemporaryRouteLossLogsSearchDiagnosticsOnlyOnce()
+    {
+        var context = CreateContext();
+        context.State.NextTrackingResult = ActiveResult();
+        context.Service.UpdateOnce();
+        context.State.NextTrackingResult = new PolicePursuitTrackingResult(
+            PolicePursuitTrackingStatus.RouteTemporarilyUnavailable,
+            null,
+            30,
+            SearchDiagnostics: new PolicePursuitSearchDiagnostics(
+                PolicePointId: 171036,
+                PreviousTargetPointId: 171048,
+                SelectedTargetPointId: null,
+                SpatialPointIds: [227470, 57704],
+                LaneEquivalentPointIds: [171048],
+                Rejections:
+                [
+                    new PolicePursuitTargetRejection(
+                        265571,
+                        PolicePursuitTargetRejectionReason.OppositeDirection)
+                ],
+                SearchFailure: PolicePursuitRouteSearchFailure.DistanceLimit,
+                VisitedNodes: 1234,
+                MaximumExploredDistanceMeters: 19_999,
+                JunctionEdgesExamined: 2));
+
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+
+        var diagnosticLogs = _sink.Events
+            .Select(logEvent => logEvent.RenderMessage())
+            .Where(message => message.Contains("Pursuit route temporarily lost"))
+            .ToArray();
+        Assert.Multiple(() =>
+        {
+            Assert.That(diagnosticLogs, Has.Length.EqualTo(1));
+            Assert.That(diagnosticLogs[0], Does.Contain("policePoint 171036"));
+            Assert.That(diagnosticLogs[0], Does.Contain("previousTargetPoint 171048"));
+            Assert.That(diagnosticLogs[0], Does.Contain("227470"));
+            Assert.That(diagnosticLogs[0], Does.Contain("171048"));
+            Assert.That(diagnosticLogs[0], Does.Contain("DistanceLimit"));
+            Assert.That(diagnosticLogs[0], Does.Contain("visitedNodes 1234"));
+            Assert.That(diagnosticLogs[0], Does.Contain("junctionEdges 2"));
+        });
+    }
+
+    [Test]
     public void RecoveredRouteResumesSpeedAndLogsOnce()
     {
         var context = CreateContext();

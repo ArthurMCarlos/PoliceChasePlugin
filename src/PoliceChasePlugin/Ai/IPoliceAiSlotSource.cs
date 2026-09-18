@@ -43,11 +43,45 @@ public sealed record PolicePursuitRouteDiagnostics(
     int VisitedNodes,
     IReadOnlyList<PolicePursuitJunctionDecision> JunctionDecisions);
 
+public enum PolicePursuitTargetRejectionReason
+{
+    InvalidDistance,
+    OutsideMaximumDistance,
+    MissingForwardDirection,
+    OppositeDirection
+}
+
+public sealed record PolicePursuitTargetRejection(
+    int PointId,
+    PolicePursuitTargetRejectionReason Reason);
+
+public enum PolicePursuitRouteSearchFailure
+{
+    None,
+    InvalidRequest,
+    DistanceLimit,
+    NodeLimit,
+    Unreachable
+}
+
+public sealed record PolicePursuitSearchDiagnostics(
+    int PolicePointId,
+    int? PreviousTargetPointId,
+    int? SelectedTargetPointId,
+    IReadOnlyList<int> SpatialPointIds,
+    IReadOnlyList<int> LaneEquivalentPointIds,
+    IReadOnlyList<PolicePursuitTargetRejection> Rejections,
+    PolicePursuitRouteSearchFailure SearchFailure,
+    int VisitedNodes,
+    float MaximumExploredDistanceMeters,
+    int JunctionEdgesExamined);
+
 public sealed record PolicePursuitTrackingResult(
     PolicePursuitTrackingStatus Status,
     float? RouteDistanceMeters,
     float TargetSpeedMetersPerSecond,
-    PolicePursuitRouteDiagnostics? RouteDiagnostics = null);
+    PolicePursuitRouteDiagnostics? RouteDiagnostics = null,
+    PolicePursuitSearchDiagnostics? SearchDiagnostics = null);
 
 public interface IPoliceAiState
 {

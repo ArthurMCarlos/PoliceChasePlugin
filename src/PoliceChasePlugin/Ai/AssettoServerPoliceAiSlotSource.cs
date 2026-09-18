@@ -3,7 +3,10 @@ using AssettoServer.Server.Ai;
 using CoreTrackingStatus = AssettoServer.Server.Ai.AiPursuitTrackingStatus;
 using CoreTrackingOptions = AssettoServer.Server.Ai.AiPursuitTrackingOptions;
 using CoreRouteDiagnostics = AssettoServer.Server.Ai.AiPursuitRouteDiagnostics;
+using CoreSearchDiagnostics = AssettoServer.Server.Ai.AiPursuitSearchDiagnostics;
 using CoreRouteUpdateKind = AssettoServer.Server.Ai.Routing.AiPursuitRouteUpdateKind;
+using CoreRejectionReason = AssettoServer.Server.Ai.Routing.AiPursuitTargetRejectionReason;
+using CoreSearchFailure = AssettoServer.Server.Ai.Routing.AiRouteSearchFailure;
 
 namespace PoliceChasePlugin.Ai;
 
@@ -56,7 +59,10 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             result.TargetSpeedMetersPerSecond,
             result.RouteDiagnostics == null
                 ? null
-                : MapDiagnostics(result.RouteDiagnostics));
+                : MapDiagnostics(result.RouteDiagnostics),
+            result.SearchDiagnostics == null
+                ? null
+                : MapSearchDiagnostics(result.SearchDiagnostics));
     }
 
     public void SetDesiredSpeed(float metersPerSecond) =>
@@ -92,6 +98,51 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
                     decision.TakeBranch,
                     decision.EndPointId))
                 .ToArray());
+
+    internal static PolicePursuitSearchDiagnostics MapSearchDiagnostics(
+        CoreSearchDiagnostics diagnostics) =>
+        new(
+            diagnostics.PolicePointId,
+            diagnostics.PreviousTargetPointId,
+            diagnostics.SelectedTargetPointId,
+            diagnostics.SpatialPointIds.ToArray(),
+            diagnostics.LaneEquivalentPointIds.ToArray(),
+            diagnostics.Rejections
+                .Select(rejection => new PolicePursuitTargetRejection(
+                    rejection.PointId,
+                    MapRejectionReason(rejection.Reason)))
+                .ToArray(),
+            MapSearchFailure(diagnostics.SearchFailure),
+            diagnostics.VisitedNodes,
+            diagnostics.MaximumExploredDistanceMeters,
+            diagnostics.JunctionEdgesExamined);
+
+    private static PolicePursuitTargetRejectionReason MapRejectionReason(
+        CoreRejectionReason reason) =>
+        reason switch
+        {
+            CoreRejectionReason.InvalidDistance =>
+                PolicePursuitTargetRejectionReason.InvalidDistance,
+            CoreRejectionReason.OutsideMaximumDistance =>
+                PolicePursuitTargetRejectionReason.OutsideMaximumDistance,
+            CoreRejectionReason.MissingForwardDirection =>
+                PolicePursuitTargetRejectionReason.MissingForwardDirection,
+            CoreRejectionReason.OppositeDirection =>
+                PolicePursuitTargetRejectionReason.OppositeDirection,
+            _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null)
+        };
+
+    private static PolicePursuitRouteSearchFailure MapSearchFailure(
+        CoreSearchFailure failure) =>
+        failure switch
+        {
+            CoreSearchFailure.None => PolicePursuitRouteSearchFailure.None,
+            CoreSearchFailure.InvalidRequest => PolicePursuitRouteSearchFailure.InvalidRequest,
+            CoreSearchFailure.DistanceLimit => PolicePursuitRouteSearchFailure.DistanceLimit,
+            CoreSearchFailure.NodeLimit => PolicePursuitRouteSearchFailure.NodeLimit,
+            CoreSearchFailure.Unreachable => PolicePursuitRouteSearchFailure.Unreachable,
+            _ => throw new ArgumentOutOfRangeException(nameof(failure), failure, null)
+        };
 
     private static PolicePursuitRouteUpdateKind MapUpdateKind(
         CoreRouteUpdateKind updateKind) =>
