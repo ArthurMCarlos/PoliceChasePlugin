@@ -9,3 +9,4 @@ PoliceChasePlugin assetto corsa server
 - [P0.4 — Reserva AI dedicada](docs/P0.4-reserva-ai-dedicada.md)
 - [P0.5 — Perseguição básica com roteamento limitado](docs/P0.5-perseguicao-basica.md)
 - [P0.6 — Navegação stateful em bifurcações](docs/P0.6-navegacao-bifurcacoes.md)
+- [P0.7 — Troca de faixa route-aware](docs/P0.7-route-aware-lane-changing.md)
