@@ -2,6 +2,7 @@ using AssettoServer.Server.Plugin;
 using Autofac;
 using PoliceChasePlugin.Ai;
 using PoliceChasePlugin.Players;
+using PoliceChasePlugin.Pursuit;
 
 namespace PoliceChasePlugin;
 
@@ -17,6 +18,10 @@ public sealed class PoliceChaseModule : AssettoServerModule<PoliceChaseConfigura
             .As<IPoliceAiSlotSource>()
             .SingleInstance();
         builder.RegisterType<PoliceAiService>().SingleInstance();
+        builder.RegisterType<PolicePursuitService>()
+            .AsSelf()
+            .As<IPolicePursuitService>()
+            .SingleInstance();
         builder.RegisterType<PoliceChaseService>()
             .AsSelf()
             .As<IAssettoServerAutostart>()

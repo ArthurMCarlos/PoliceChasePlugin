@@ -3,6 +3,7 @@ using AssettoServer.Shared.Services;
 using Microsoft.Extensions.Hosting;
 using PoliceChasePlugin.Ai;
 using PoliceChasePlugin.Players;
+using PoliceChasePlugin.Pursuit;
 using Serilog;
 
 namespace PoliceChasePlugin;
@@ -12,16 +13,19 @@ public sealed class PoliceChaseService : CriticalBackgroundService, IAssettoServ
     private readonly PoliceChaseConfiguration _configuration;
     private readonly PoliceAiService _policeAiService;
     private readonly PoliceTargetService _targetService;
+    private readonly IPolicePursuitService _pursuitService;
 
     public PoliceChaseService(
         PoliceChaseConfiguration configuration,
         PoliceAiService policeAiService,
         PoliceTargetService targetService,
+        IPolicePursuitService pursuitService,
         IHostApplicationLifetime applicationLifetime) : base(applicationLifetime)
     {
         _configuration = configuration;
         _policeAiService = policeAiService;
         _targetService = targetService;
+        _pursuitService = pursuitService;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -38,7 +42,7 @@ public sealed class PoliceChaseService : CriticalBackgroundService, IAssettoServ
 
         try
         {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
+            await _pursuitService.RunAsync(stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -46,6 +50,7 @@ public sealed class PoliceChaseService : CriticalBackgroundService, IAssettoServ
         }
         finally
         {
+            _pursuitService.Release();
             _targetService.Stop();
             Log.Information("[PoliceChase] Plugin stopping");
         }

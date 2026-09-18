@@ -1,6 +1,7 @@
 using Serilog;
 using PoliceChasePlugin.Ai;
 using PoliceChasePlugin.Players;
+using PoliceChasePlugin.Pursuit;
 using PoliceChasePlugin.Tests.Ai;
 using PoliceChasePlugin.Tests.Players;
 
@@ -31,10 +32,12 @@ public class PoliceChaseServiceTests
     [Test]
     public async Task EnabledServiceLogsInitializationAndShutdown()
     {
+        var pursuit = new FakePolicePursuitService();
         using var service = new PoliceChaseService(
             new PoliceChaseConfiguration { Enabled = true, PoliceCarSessionId = 7 },
             CreateAiService(),
             CreateTargetService().Service,
+            pursuit,
             _lifetime);
 
         await service.StartAsync(CancellationToken.None);
@@ -45,6 +48,8 @@ public class PoliceChaseServiceTests
         {
             Assert.That(_sink.ContainsMessage("[PoliceChase] Plugin initialized"), Is.True);
             Assert.That(_sink.ContainsMessage("[PoliceChase] Plugin stopping"), Is.True);
+            Assert.That(pursuit.RunCount, Is.EqualTo(1));
+            Assert.That(pursuit.ReleaseCount, Is.EqualTo(1));
         });
     }
 
@@ -55,6 +60,7 @@ public class PoliceChaseServiceTests
             new PoliceChaseConfiguration { Enabled = false },
             CreateAiService(),
             CreateTargetService().Service,
+            new FakePolicePursuitService(),
             _lifetime);
 
         await service.StartAsync(CancellationToken.None);
@@ -75,6 +81,7 @@ public class PoliceChaseServiceTests
             new PoliceChaseConfiguration { Enabled = true, PoliceCarSessionId = 7 },
             CreateAiService(),
             targetService,
+            new FakePolicePursuitService(),
             _lifetime);
 
         await service.StartAsync(CancellationToken.None);
@@ -93,10 +100,12 @@ public class PoliceChaseServiceTests
         var aiSource = new FakePoliceAiSlotSource();
         var aiService = new PoliceAiService(aiSource, new PoliceChaseConfiguration());
         var (targetService, playerSource) = CreateTargetService();
+        var pursuit = new FakePolicePursuitService();
         using var service = new PoliceChaseService(
             new PoliceChaseConfiguration { Enabled = false },
             aiService,
             targetService,
+            pursuit,
             _lifetime);
 
         await service.StartAsync(CancellationToken.None);
@@ -106,6 +115,8 @@ public class PoliceChaseServiceTests
         {
             Assert.That(aiSource.PreparedSessionId, Is.Null);
             Assert.That(playerSource.StartCount, Is.Zero);
+            Assert.That(pursuit.RunCount, Is.Zero);
+            Assert.That(pursuit.ReleaseCount, Is.Zero);
         });
     }
 
@@ -125,5 +136,19 @@ public class PoliceChaseServiceTests
     {
         var source = new FakePolicePlayerSource();
         return (new PoliceTargetService(source), source);
+    }
+
+    private sealed class FakePolicePursuitService : IPolicePursuitService
+    {
+        public int RunCount { get; private set; }
+        public int ReleaseCount { get; private set; }
+
+        public async Task RunAsync(CancellationToken stoppingToken)
+        {
+            RunCount++;
+            await Task.Delay(Timeout.Infinite, stoppingToken);
+        }
+
+        public void Release() => ReleaseCount++;
     }
 }
