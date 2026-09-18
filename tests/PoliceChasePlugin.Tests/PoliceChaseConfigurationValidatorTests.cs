@@ -12,11 +12,11 @@ public class PoliceChaseConfigurationValidatorTests
     }
 
     [Test]
-    public void AcceptsValidP0Configuration()
+    public void AcceptsValidP05Configuration()
     {
         var result = _validator.Validate(new PoliceChaseConfiguration
         {
-            PoliceCarSessionId = 0
+            PoliceCarSessionId = 12
         });
 
         Assert.That(result.IsValid, Is.True);
@@ -24,74 +24,68 @@ public class PoliceChaseConfigurationValidatorTests
 
     [TestCase(0)]
     [TestCase(-1)]
-    public void RejectsNonPositiveMaximumPoliceSpeed(float speed)
+    public void RejectsNonPositiveMaximumDistance(float value)
     {
-        var configuration = new PoliceChaseConfiguration { MaxPoliceSpeedKph = speed };
+        var result = _validator.Validate(new PoliceChaseConfiguration
+        {
+            PursuitMaxDistanceMeters = value
+        });
 
-        var result = _validator.Validate(configuration);
-
-        Assert.That(result.Errors, Has.Some.Property("PropertyName").EqualTo(nameof(PoliceChaseConfiguration.MaxPoliceSpeedKph)));
+        Assert.That(result.Errors, Has.Some.Property("PropertyName")
+            .EqualTo(nameof(PoliceChaseConfiguration.PursuitMaxDistanceMeters)));
     }
 
     [TestCase(0)]
     [TestCase(-1)]
-    public void RejectsNonPositiveDebugInterval(int interval)
+    [TestCase(1500)]
+    [TestCase(1600)]
+    public void RejectsDesiredDistanceOutsideMaximum(float value)
     {
-        var configuration = new PoliceChaseConfiguration { DebugIntervalMs = interval };
+        var result = _validator.Validate(new PoliceChaseConfiguration
+        {
+            PursuitDesiredDistanceMeters = value,
+            PursuitMaxDistanceMeters = 1500
+        });
 
-        var result = _validator.Validate(configuration);
-
-        Assert.That(result.Errors, Has.Some.Property("PropertyName").EqualTo(nameof(PoliceChaseConfiguration.DebugIntervalMs)));
+        Assert.That(result.Errors, Has.Some.Property("PropertyName")
+            .EqualTo(nameof(PoliceChaseConfiguration.PursuitDesiredDistanceMeters)));
     }
 
-    [TestCase(150, 150, 800, 2000, "NearDistanceMeters")]
-    [TestCase(150, 800, 800, 2000, "MediumDistanceMeters")]
-    [TestCase(150, 400, 2000, 2000, "FarDistanceMeters")]
-    [TestCase(150, 400, 800, 0, "LostDistanceMeters")]
-    [TestCase(0, 400, 800, 2000, "NearDistanceMeters")]
-    public void RejectsInvalidDistanceOrder(float near, float medium, float far, float lost, string expectedProperty)
+    [TestCase(0)]
+    [TestCase(-1)]
+    public void RejectsNonPositiveMaximumSpeed(float value)
     {
-        var configuration = new PoliceChaseConfiguration
+        var result = _validator.Validate(new PoliceChaseConfiguration
         {
-            NearDistanceMeters = near,
-            MediumDistanceMeters = medium,
-            FarDistanceMeters = far,
-            LostDistanceMeters = lost
-        };
+            PursuitMaxSpeedKph = value
+        });
 
-        var result = _validator.Validate(configuration);
-
-        Assert.That(result.Errors, Has.Some.Property("PropertyName").EqualTo(expectedProperty));
+        Assert.That(result.Errors, Has.Some.Property("PropertyName")
+            .EqualTo(nameof(PoliceChaseConfiguration.PursuitMaxSpeedKph)));
     }
 
-    [TestCase(-1, 40, 20, "FarSpeedBonusKph")]
-    [TestCase(60, -1, 20, "MediumSpeedBonusKph")]
-    [TestCase(60, 40, -1, "NearSpeedBonusKph")]
-    public void RejectsNegativeSpeedBonus(float far, float medium, float near, string expectedProperty)
+    [TestCase(0)]
+    [TestCase(-1)]
+    public void RejectsNonPositiveUpdateInterval(int value)
     {
-        var configuration = new PoliceChaseConfiguration
+        var result = _validator.Validate(new PoliceChaseConfiguration
         {
-            FarSpeedBonusKph = far,
-            MediumSpeedBonusKph = medium,
-            NearSpeedBonusKph = near
-        };
+            PursuitUpdateIntervalMilliseconds = value
+        });
 
-        var result = _validator.Validate(configuration);
-
-        Assert.That(result.Errors, Has.Some.Property("PropertyName").EqualTo(expectedProperty));
+        Assert.That(result.Errors, Has.Some.Property("PropertyName")
+            .EqualTo(nameof(PoliceChaseConfiguration.PursuitUpdateIntervalMilliseconds)));
     }
 
     [TestCase(-1)]
     [TestCase(255)]
     public void RejectsInvalidPoliceSessionIdWhenEnabled(int sessionId)
     {
-        var configuration = new PoliceChaseConfiguration
+        var result = _validator.Validate(new PoliceChaseConfiguration
         {
             Enabled = true,
             PoliceCarSessionId = sessionId
-        };
-
-        var result = _validator.Validate(configuration);
+        });
 
         Assert.That(result.Errors, Has.Some.Property("PropertyName")
             .EqualTo(nameof(PoliceChaseConfiguration.PoliceCarSessionId)));
@@ -100,13 +94,11 @@ public class PoliceChaseConfigurationValidatorTests
     [Test]
     public void AcceptsUnsetPoliceSessionIdWhenDisabled()
     {
-        var configuration = new PoliceChaseConfiguration
+        var result = _validator.Validate(new PoliceChaseConfiguration
         {
             Enabled = false,
             PoliceCarSessionId = -1
-        };
-
-        var result = _validator.Validate(configuration);
+        });
 
         Assert.That(result.IsValid, Is.True);
     }

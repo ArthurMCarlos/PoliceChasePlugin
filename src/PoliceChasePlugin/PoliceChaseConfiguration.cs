@@ -9,14 +9,8 @@ public class PoliceChaseConfiguration : IValidateConfiguration<PoliceChaseConfig
     public bool Enabled { get; set; } = true;
     public string PoliceCarModel { get; set; } = "";
     public int PoliceCarSessionId { get; set; } = -1;
-    public float MaxPoliceSpeedKph { get; set; } = 280;
-    public float FarDistanceMeters { get; set; } = 800;
-    public float MediumDistanceMeters { get; set; } = 400;
-    public float NearDistanceMeters { get; set; } = 150;
-    public float FarSpeedBonusKph { get; set; } = 60;
-    public float MediumSpeedBonusKph { get; set; } = 40;
-    public float NearSpeedBonusKph { get; set; } = 20;
-    public float LostDistanceMeters { get; set; } = 2000;
-    public bool Debug { get; set; } = true;
-    public int DebugIntervalMs { get; set; } = 1000;
+    public float PursuitMaxDistanceMeters { get; set; } = 1500;
+    public float PursuitDesiredDistanceMeters { get; set; } = 50;
+    public float PursuitMaxSpeedKph { get; set; } = 180;
+    public int PursuitUpdateIntervalMilliseconds { get; set; } = 200;
 }

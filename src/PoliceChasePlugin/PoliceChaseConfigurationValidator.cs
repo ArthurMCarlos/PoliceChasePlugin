@@ -13,20 +13,14 @@ public class PoliceChaseConfigurationValidator : AbstractValidator<PoliceChaseCo
             RuleFor(configuration => configuration.PoliceCarSessionId)
                 .InclusiveBetween(0, 254);
         });
-        RuleFor(configuration => configuration.MaxPoliceSpeedKph).GreaterThan(0);
-        RuleFor(configuration => configuration.NearDistanceMeters)
+        RuleFor(configuration => configuration.PursuitMaxDistanceMeters)
+            .GreaterThan(0);
+        RuleFor(configuration => configuration.PursuitDesiredDistanceMeters)
             .GreaterThan(0)
-            .LessThan(configuration => configuration.MediumDistanceMeters);
-        RuleFor(configuration => configuration.MediumDistanceMeters)
-            .GreaterThan(0)
-            .LessThan(configuration => configuration.FarDistanceMeters);
-        RuleFor(configuration => configuration.FarDistanceMeters)
-            .GreaterThan(0)
-            .LessThan(configuration => configuration.LostDistanceMeters);
-        RuleFor(configuration => configuration.LostDistanceMeters).GreaterThan(0);
-        RuleFor(configuration => configuration.FarSpeedBonusKph).GreaterThanOrEqualTo(0);
-        RuleFor(configuration => configuration.MediumSpeedBonusKph).GreaterThanOrEqualTo(0);
-        RuleFor(configuration => configuration.NearSpeedBonusKph).GreaterThanOrEqualTo(0);
-        RuleFor(configuration => configuration.DebugIntervalMs).GreaterThan(0);
+            .LessThan(configuration => configuration.PursuitMaxDistanceMeters);
+        RuleFor(configuration => configuration.PursuitMaxSpeedKph)
+            .GreaterThan(0);
+        RuleFor(configuration => configuration.PursuitUpdateIntervalMilliseconds)
+            .GreaterThan(0);
     }
 }

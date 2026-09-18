@@ -4,7 +4,7 @@ namespace PoliceChasePlugin.Tests;
 public class PoliceChaseConfigurationTests
 {
     [Test]
-    public void NewConfigurationUsesP0Defaults()
+    public void NewConfigurationUsesP05Defaults()
     {
         var configuration = new PoliceChaseConfiguration();
 
@@ -13,16 +13,10 @@ public class PoliceChaseConfigurationTests
             Assert.That(configuration.Enabled, Is.True);
             Assert.That(configuration.PoliceCarModel, Is.Empty);
             Assert.That(configuration.PoliceCarSessionId, Is.EqualTo(-1));
-            Assert.That(configuration.MaxPoliceSpeedKph, Is.EqualTo(280));
-            Assert.That(configuration.FarDistanceMeters, Is.EqualTo(800));
-            Assert.That(configuration.MediumDistanceMeters, Is.EqualTo(400));
-            Assert.That(configuration.NearDistanceMeters, Is.EqualTo(150));
-            Assert.That(configuration.FarSpeedBonusKph, Is.EqualTo(60));
-            Assert.That(configuration.MediumSpeedBonusKph, Is.EqualTo(40));
-            Assert.That(configuration.NearSpeedBonusKph, Is.EqualTo(20));
-            Assert.That(configuration.LostDistanceMeters, Is.EqualTo(2000));
-            Assert.That(configuration.Debug, Is.True);
-            Assert.That(configuration.DebugIntervalMs, Is.EqualTo(1000));
+            Assert.That(configuration.PursuitMaxDistanceMeters, Is.EqualTo(1500));
+            Assert.That(configuration.PursuitDesiredDistanceMeters, Is.EqualTo(50));
+            Assert.That(configuration.PursuitMaxSpeedKph, Is.EqualTo(180));
+            Assert.That(configuration.PursuitUpdateIntervalMilliseconds, Is.EqualTo(200));
         });
     }
 }
