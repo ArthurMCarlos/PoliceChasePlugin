@@ -5,7 +5,7 @@ namespace PoliceChasePlugin.Tests.Ai;
 
 internal sealed class FakePoliceAiState : IPoliceAiState
 {
-    public bool IsInitialized { get; }
+    public bool IsInitialized { get; set; }
     public PolicePursuitTrackingResult NextTrackingResult { get; set; } =
         new(PolicePursuitTrackingStatus.WaitingForSpawn, null, 0);
     public List<(byte TargetSessionId, float MaxDistanceMeters)> TrackRequests { get; } = new();

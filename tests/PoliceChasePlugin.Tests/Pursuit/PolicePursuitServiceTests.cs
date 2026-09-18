@@ -146,6 +146,25 @@ public class PolicePursuitServiceTests
     }
 
     [Test]
+    public void PoliceStateBecomingUninitializedEndsActivePursuitOnce()
+    {
+        var context = CreateContext();
+        context.State.NextTrackingResult = ActiveResult();
+        context.Service.UpdateOnce();
+        context.State.IsInitialized = false;
+
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(context.State.ReleaseCount, Is.EqualTo(1));
+            Assert.That(_sink.Events.Count(e =>
+                e.RenderMessage().Contains("police-state-uninitialized")), Is.EqualTo(1));
+        });
+    }
+
+    [Test]
     public void TargetChangeReleasesOldControlBeforeTrackingNewTarget()
     {
         var context = CreateContext();

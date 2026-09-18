@@ -34,8 +34,14 @@ public sealed class PolicePursuitService : IPolicePursuitService
         var state = _policeAiService.SelectedState;
         var targetSessionId = _targetService.CurrentTargetSessionId;
 
-        if (state == null || !state.IsInitialized)
+        if (state == null)
             return;
+
+        if (!state.IsInitialized)
+        {
+            ReleaseInternal("police-state-uninitialized");
+            return;
+        }
 
         if (!targetSessionId.HasValue)
         {
