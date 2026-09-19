@@ -142,8 +142,11 @@ public class AssettoServerPoliceAiStateTests
                 200,
                 CoreLaneChangeDirection.Left,
                 3,
-                55,
-                "BlockedFront"));
+                55)
+            {
+                Reason = CoreLaneChangeReason.ObstacleAhead,
+                SafetyStatus = CoreLaneChangeSafety.BlockedFront
+            });
 
         Assert.Multiple(() =>
         {
@@ -154,7 +157,8 @@ public class AssettoServerPoliceAiStateTests
             Assert.That(mapped.Direction, Is.EqualTo(PoliceLaneChangeDirection.Left));
             Assert.That(mapped.RouteRevision, Is.EqualTo(3));
             Assert.That(mapped.DistanceToDecisionMeters, Is.EqualTo(55));
-            Assert.That(mapped.BlockingReason, Is.EqualTo("BlockedFront"));
+            Assert.That(mapped.SafetyStatus,
+                Is.EqualTo(PolicePursuitLaneChangeSafetyStatus.BlockedFront));
         });
     }
 
@@ -168,8 +172,7 @@ public class AssettoServerPoliceAiStateTests
             175784,
             CoreLaneChangeDirection.Right,
             5,
-            420,
-            null)
+            420)
         {
             Reason = CoreLaneChangeReason.RoutePreparation,
             PolicePointId = 312936,
@@ -234,8 +237,7 @@ public class AssettoServerPoliceAiStateTests
                 2,
                 core,
                 1,
-                50,
-                null));
+                50));
 
         Assert.That(mapped.Direction, Is.EqualTo(expected));
     }

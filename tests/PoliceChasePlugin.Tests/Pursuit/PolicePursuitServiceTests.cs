@@ -336,8 +336,7 @@ public class PolicePursuitServiceTests
             101,
             PoliceLaneChangeDirection.Left,
             4,
-            55,
-            null));
+            55));
         var waiting = ActiveResult(laneChange: new PolicePursuitLaneChangeDiagnostics(
             2,
             PolicePursuitLaneChangeEventKind.Waiting,
@@ -345,8 +344,11 @@ public class PolicePursuitServiceTests
             101,
             PoliceLaneChangeDirection.Left,
             4,
-            54,
-            "BlockedRearClosing"));
+            54)
+        {
+            Reason = PolicePursuitLaneChangeDiagnosticReason.ObstacleBehind,
+            SafetyStatus = PolicePursuitLaneChangeSafetyStatus.BlockedRearClosing
+        });
         context.State.Enqueue(required);
         context.State.Enqueue(required);
         context.State.Enqueue(waiting);
@@ -379,7 +381,11 @@ public class PolicePursuitServiceTests
             revision: 2,
             reason: PolicePursuitLaneChangeDiagnosticReason.RoutePreparation,
             junctionId: 2,
-            distanceToDecision: 498);
+            distanceToDecision: 498) with
+        {
+            PolicePointId = 312937,
+            RouteRevision = 6
+        };
         var changed = EvaluationDiagnostics(
             revision: 3,
             reason: PolicePursuitLaneChangeDiagnosticReason.BeyondLookahead,
@@ -403,6 +409,69 @@ public class PolicePursuitServiceTests
         });
     }
 
+    [Test]
+    public void TemporaryRouteLossStillLogsLaneChangeLifecycleEvent()
+    {
+        var context = CreateContext();
+        context.State.Enqueue(ActiveResult());
+        context.State.Enqueue(new PolicePursuitTrackingResult(
+            PolicePursuitTrackingStatus.RouteTemporarilyUnavailable,
+            null,
+            20 / 3.6f,
+            LaneChangeDiagnostics: new PolicePursuitLaneChangeDiagnostics(
+                7,
+                PolicePursuitLaneChangeEventKind.Completed,
+                100,
+                101,
+                PoliceLaneChangeDirection.Left,
+                4,
+                null)));
+
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+
+        Assert.That(LogCount("Lane change completed"), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void EvaluationLogsWhenSecondRejectedLaneEvidenceChanges()
+    {
+        var context = CreateContext();
+        var first = EvaluationDiagnostics(1,
+            PolicePursuitLaneChangeDiagnosticReason.NoForwardRoute, 2, 500) with
+        {
+            CandidateLaneRoutes = [LaneCandidate(10, 2), LaneCandidate(20, 7)]
+        };
+        var changed = first with
+        {
+            Revision = 2,
+            PolicePointId = 312937,
+            RouteRevision = 6,
+            CandidateLaneRoutes = [LaneCandidate(10, 2), LaneCandidate(20, 8)]
+        };
+        context.State.Enqueue(ActiveResult(laneChange: first));
+        context.State.Enqueue(ActiveResult(laneChange: changed));
+
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+
+        Assert.That(LogCount("Lane change evaluation"), Is.EqualTo(2));
+    }
+
+    private static PolicePursuitLaneRouteDiagnostic LaneCandidate(
+        int pointId,
+        int junctionId) =>
+        new(
+            pointId,
+            pointId == 10 ? PoliceLaneChangeDirection.Left : PoliceLaneChangeDirection.Right,
+            PolicePursuitRouteSearchFailure.None,
+            600,
+            600,
+            1,
+            junctionId,
+            500,
+            PolicePursuitLaneChangeDiagnosticReason.NoForwardRoute);
+
     private static PolicePursuitLaneChangeDiagnostics EvaluationDiagnostics(
         long revision,
         PolicePursuitLaneChangeDiagnosticReason reason,
@@ -415,8 +484,7 @@ public class PolicePursuitServiceTests
             175784,
             PoliceLaneChangeDirection.Right,
             5,
-            distanceToDecision,
-            null)
+            distanceToDecision)
         {
             Reason = reason,
             PolicePointId = 312936,

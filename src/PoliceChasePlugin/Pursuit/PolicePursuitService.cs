@@ -93,6 +93,8 @@ public sealed class PolicePursuitService : IPolicePursuitService
         var result = state.TrackPursuit(
             targetSessionId.Value,
             _trackingOptions);
+        if (result.Status != PolicePursuitTrackingStatus.Active)
+            LogLaneChangeTransition(targetSessionId.Value, result.LaneChangeDiagnostics);
 
         switch (result.Status)
         {
@@ -267,14 +269,13 @@ public sealed class PolicePursuitService : IPolicePursuitService
             var signature = new LaneChangeLogSignature(
                 diagnostics.EventKind,
                 diagnostics.Reason,
-                diagnostics.PolicePointId,
                 diagnostics.PreferredPhysicalTargetPointId,
                 diagnostics.FromPointId,
                 diagnostics.ToPointId,
                 diagnostics.Direction,
                 diagnostics.JunctionId,
                 diagnostics.SafetyStatus,
-                diagnostics.RouteRevision);
+                CreateLaneCandidateEvidence(diagnostics));
             if (_lastLaneChangeEvaluationSignature == signature)
                 return;
             _lastLaneChangeEvaluationSignature = signature;
@@ -315,12 +316,12 @@ public sealed class PolicePursuitService : IPolicePursuitService
                 break;
             case PolicePursuitLaneChangeEventKind.Waiting:
                 Log.Information(
-                    "[PoliceChase] Lane change waiting: target {TargetSessionId}, from {FromPointId}, to {ToPointId}, direction {Direction}, reason {BlockingReason}",
+                    "[PoliceChase] Lane change waiting: target {TargetSessionId}, from {FromPointId}, to {ToPointId}, direction {Direction}, reason {Reason}",
                     targetSessionId,
                     diagnostics.FromPointId,
                     diagnostics.ToPointId,
                     diagnostics.Direction,
-                    diagnostics.BlockingReason);
+                    diagnostics.SafetyStatus?.ToString() ?? diagnostics.Reason.ToString());
                 break;
             case PolicePursuitLaneChangeEventKind.Started:
                 Log.Information(
@@ -365,14 +366,22 @@ public sealed class PolicePursuitService : IPolicePursuitService
     private sealed record LaneChangeLogSignature(
         PolicePursuitLaneChangeEventKind EventKind,
         PolicePursuitLaneChangeDiagnosticReason Reason,
-        int PolicePointId,
         int? PreferredPhysicalTargetPointId,
-        int FromPointId,
-        int ToPointId,
-        PoliceLaneChangeDirection Direction,
+        int? FromPointId,
+        int? ToPointId,
+        PoliceLaneChangeDirection? Direction,
         int? JunctionId,
         PolicePursuitLaneChangeSafetyStatus? SafetyStatus,
-        long RouteRevision);
+        string CandidateEvidence);
+
+    private static string CreateLaneCandidateEvidence(
+        PolicePursuitLaneChangeDiagnostics diagnostics) =>
+        string.Join("|", diagnostics.CandidateLaneRoutes
+            .OrderBy(candidate => candidate.Direction)
+            .ThenBy(candidate => candidate.PointId)
+            .Select(candidate =>
+                $"{candidate.PointId}:{candidate.Direction}:{candidate.SearchFailure}:" +
+                $"{candidate.JunctionId}:{candidate.Reason}"));
 
     private void LogRouteTransitions(
         byte targetSessionId,

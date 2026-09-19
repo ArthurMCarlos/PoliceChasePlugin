@@ -142,10 +142,11 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             MapLaneChangeEventKind(diagnostics.EventKind),
             diagnostics.FromPointId,
             diagnostics.ToPointId,
-            MapLaneChangeDirection(diagnostics.Direction),
+            diagnostics.Direction.HasValue
+                ? MapLaneChangeDirection(diagnostics.Direction.Value)
+                : null,
             diagnostics.RouteRevision,
-            diagnostics.DistanceToDecisionMeters,
-            diagnostics.BlockingReason)
+            diagnostics.DistanceToDecisionMeters)
         {
             Reason = MapLaneChangeReason(diagnostics.Reason),
             PolicePointId = diagnostics.PolicePointId,
@@ -241,6 +242,7 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             CoreLaneEvaluationReason.BeyondLookahead => PolicePursuitLaneChangeDiagnosticReason.BeyondLookahead,
             CoreLaneEvaluationReason.InsufficientPreparationDistance => PolicePursuitLaneChangeDiagnosticReason.InsufficientPreparationDistance,
             CoreLaneEvaluationReason.RoutePreparation => PolicePursuitLaneChangeDiagnosticReason.RoutePreparation,
+            CoreLaneEvaluationReason.Cooldown => PolicePursuitLaneChangeDiagnosticReason.Cooldown,
             _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null)
         };
 

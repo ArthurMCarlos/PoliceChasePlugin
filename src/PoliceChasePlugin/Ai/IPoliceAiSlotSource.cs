@@ -29,13 +29,13 @@ public sealed record PolicePursuitLaneChangeOptions(
 
 public enum PolicePursuitLaneChangeEventKind
 {
-    Evaluated,
-    Required,
-    Waiting,
-    Started,
-    Completed,
-    Cancelled,
-    RouteRevised
+    Required = 0,
+    Waiting = 1,
+    Started = 2,
+    Completed = 3,
+    Cancelled = 4,
+    RouteRevised = 5,
+    Evaluated = 6
 }
 
 public enum PolicePursuitLaneChangeDiagnosticReason
@@ -79,12 +79,11 @@ public enum PoliceLaneChangeDirection
 public sealed record PolicePursuitLaneChangeDiagnostics(
     long Revision,
     PolicePursuitLaneChangeEventKind EventKind,
-    int FromPointId,
-    int ToPointId,
-    PoliceLaneChangeDirection Direction,
+    int? FromPointId,
+    int? ToPointId,
+    PoliceLaneChangeDirection? Direction,
     long RouteRevision,
-    float? DistanceToDecisionMeters,
-    string? BlockingReason)
+    float? DistanceToDecisionMeters)
 {
     public PolicePursuitLaneChangeDiagnosticReason Reason { get; init; }
     public int PolicePointId { get; init; }
