@@ -9,6 +9,10 @@ using CoreSearchFailure = AssettoServer.Server.Ai.Routing.AiRouteSearchFailure;
 using CoreLaneChangeDiagnostics = AssettoServer.Server.Ai.AiPursuitLaneChangeDiagnostics;
 using CoreLaneChangeEventKind = AssettoServer.Server.Ai.AiPursuitLaneChangeEventKind;
 using CoreLaneChangeDirection = AssettoServer.Server.Ai.Routing.AiLaneChangeDirection;
+using CoreLaneChangeReason = AssettoServer.Server.Ai.AiPursuitLaneChangeDiagnosticReason;
+using CoreLaneChangeSafety = AssettoServer.Server.Ai.AiLaneChangeSafetyStatus;
+using CoreLaneRouteDiagnostic = AssettoServer.Server.Ai.Routing.AiPursuitLaneRouteDiagnostic;
+using CoreLaneEvaluationReason = AssettoServer.Server.Ai.Routing.AiPursuitLaneEvaluationReason;
 using PoliceChasePlugin.Ai;
 
 namespace PoliceChasePlugin.Tests.Ai;
@@ -120,6 +124,7 @@ public class AssettoServerPoliceAiStateTests
     }
 
     [TestCase(CoreLaneChangeEventKind.Required, PolicePursuitLaneChangeEventKind.Required)]
+    [TestCase(CoreLaneChangeEventKind.Evaluated, PolicePursuitLaneChangeEventKind.Evaluated)]
     [TestCase(CoreLaneChangeEventKind.Waiting, PolicePursuitLaneChangeEventKind.Waiting)]
     [TestCase(CoreLaneChangeEventKind.Started, PolicePursuitLaneChangeEventKind.Started)]
     [TestCase(CoreLaneChangeEventKind.Completed, PolicePursuitLaneChangeEventKind.Completed)]
@@ -150,6 +155,68 @@ public class AssettoServerPoliceAiStateTests
             Assert.That(mapped.RouteRevision, Is.EqualTo(3));
             Assert.That(mapped.DistanceToDecisionMeters, Is.EqualTo(55));
             Assert.That(mapped.BlockingReason, Is.EqualTo("BlockedFront"));
+        });
+    }
+
+    [Test]
+    public void MapsTypedLaneChangeEvaluationEvidence()
+    {
+        var core = new CoreLaneChangeDiagnostics(
+            9,
+            CoreLaneChangeEventKind.Evaluated,
+            312936,
+            175784,
+            CoreLaneChangeDirection.Right,
+            5,
+            420,
+            null)
+        {
+            Reason = CoreLaneChangeReason.RoutePreparation,
+            PolicePointId = 312936,
+            PreferredPhysicalTargetPointId = 311797,
+            JunctionId = 2,
+            SafetyStatus = CoreLaneChangeSafety.BlockedSide,
+            CurrentLaneRoute = new CoreLaneRouteDiagnostic(
+                312936,
+                null,
+                CoreSearchFailure.DistanceLimit,
+                null,
+                19_999,
+                22,
+                null,
+                null,
+                CoreLaneEvaluationReason.NoForwardRoute),
+            CandidateLaneRoutes =
+            [
+                new CoreLaneRouteDiagnostic(
+                    175784,
+                    CoreLaneChangeDirection.Right,
+                    CoreSearchFailure.None,
+                    600,
+                    600,
+                    1,
+                    2,
+                    420,
+                    CoreLaneEvaluationReason.RoutePreparation)
+            ]
+        };
+
+        var mapped = AssettoServerNativePolicePursuitState.MapLaneChangeDiagnostics(core);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(mapped.Reason,
+                Is.EqualTo(PolicePursuitLaneChangeDiagnosticReason.RoutePreparation));
+            Assert.That(mapped.PolicePointId, Is.EqualTo(312936));
+            Assert.That(mapped.PreferredPhysicalTargetPointId, Is.EqualTo(311797));
+            Assert.That(mapped.JunctionId, Is.EqualTo(2));
+            Assert.That(mapped.SafetyStatus,
+                Is.EqualTo(PolicePursuitLaneChangeSafetyStatus.BlockedSide));
+            Assert.That(mapped.CurrentLaneRoute!.SearchFailure,
+                Is.EqualTo(PolicePursuitRouteSearchFailure.DistanceLimit));
+            Assert.That(mapped.CurrentLaneRoute.MaximumExploredDistanceMeters,
+                Is.EqualTo(19_999));
+            Assert.That(mapped.CandidateLaneRoutes.Single().JunctionId, Is.EqualTo(2));
         });
     }
 

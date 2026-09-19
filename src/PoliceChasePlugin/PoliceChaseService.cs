@@ -36,6 +36,20 @@ public sealed class PoliceChaseService : CriticalBackgroundService, IAssettoServ
             return;
         }
 
+        if (_configuration.PursuitLaneChangeEnabled)
+        {
+            Log.Information(
+                "[PoliceChase] Route-aware lane changing enabled: lookahead {LookaheadMeters:0.0} m, transition {TransitionMeters:0.0} m, cooldown {CooldownMilliseconds} ms",
+                _configuration.PursuitLaneChangeLookaheadMeters,
+                _configuration.PursuitLaneChangeDistanceMeters,
+                _configuration.PursuitLaneChangeCooldownMilliseconds);
+        }
+        else
+        {
+            Log.Information(
+                "[PoliceChase] Route-aware lane changing disabled by configuration");
+        }
+
         _policeAiService.Prepare();
         _targetService.Start();
         Log.Information("[PoliceChase] Plugin initialized");

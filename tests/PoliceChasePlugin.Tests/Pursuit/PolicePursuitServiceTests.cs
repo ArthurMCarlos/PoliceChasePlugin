@@ -44,7 +44,7 @@ public class PolicePursuitServiceTests
                 {
                     ((byte)10, new PolicePursuitTrackingOptions(
                         1500, 20_000, 50_000, 2000,
-                        new PolicePursuitLaneChangeOptions(true, 60, 3000)))
+                        new PolicePursuitLaneChangeOptions(true, 60, 3000, 1000)))
                 }));
             Assert.That(context.State.SpeedRequests.Single() * 3.6f,
                 Is.EqualTo(45).Within(0.01));
@@ -365,6 +365,64 @@ public class PolicePursuitServiceTests
                 e.RenderMessage().Contains("BlockedRearClosing")), Is.True);
         });
     }
+
+    [Test]
+    public void LaneChangeEvaluationsDeduplicateDistanceOnlyChanges()
+    {
+        var context = CreateContext();
+        var first = EvaluationDiagnostics(
+            revision: 1,
+            reason: PolicePursuitLaneChangeDiagnosticReason.RoutePreparation,
+            junctionId: 2,
+            distanceToDecision: 500);
+        var sameMeaning = EvaluationDiagnostics(
+            revision: 2,
+            reason: PolicePursuitLaneChangeDiagnosticReason.RoutePreparation,
+            junctionId: 2,
+            distanceToDecision: 498);
+        var changed = EvaluationDiagnostics(
+            revision: 3,
+            reason: PolicePursuitLaneChangeDiagnosticReason.BeyondLookahead,
+            junctionId: 3,
+            distanceToDecision: 1200);
+        context.State.Enqueue(ActiveResult(laneChange: first));
+        context.State.Enqueue(ActiveResult(laneChange: sameMeaning));
+        context.State.Enqueue(ActiveResult(laneChange: changed));
+
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(LogCount("Lane change evaluation"), Is.EqualTo(2));
+            Assert.That(_sink.Events.Any(e =>
+                e.RenderMessage().Contains("RoutePreparation")), Is.True);
+            Assert.That(_sink.Events.Any(e =>
+                e.RenderMessage().Contains("BeyondLookahead")), Is.True);
+        });
+    }
+
+    private static PolicePursuitLaneChangeDiagnostics EvaluationDiagnostics(
+        long revision,
+        PolicePursuitLaneChangeDiagnosticReason reason,
+        int junctionId,
+        float distanceToDecision) =>
+        new(
+            revision,
+            PolicePursuitLaneChangeEventKind.Evaluated,
+            312936,
+            175784,
+            PoliceLaneChangeDirection.Right,
+            5,
+            distanceToDecision,
+            null)
+        {
+            Reason = reason,
+            PolicePointId = 312936,
+            PreferredPhysicalTargetPointId = 311797,
+            JunctionId = junctionId
+        };
 
     private static PolicePursuitTrackingResult ActiveResult() =>
         new(PolicePursuitTrackingStatus.Active, 150, 20 / 3.6f);

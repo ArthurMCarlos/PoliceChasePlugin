@@ -54,6 +54,53 @@ public class PoliceChaseServiceTests
     }
 
     [Test]
+    public async Task EnabledServiceLogsEffectiveLaneChangeConfiguration()
+    {
+        using var service = new PoliceChaseService(
+            new PoliceChaseConfiguration
+            {
+                Enabled = true,
+                PoliceCarSessionId = 7,
+                PursuitLaneChangeEnabled = true,
+                PursuitLaneChangeLookaheadMeters = 1000,
+                PursuitLaneChangeDistanceMeters = 60,
+                PursuitLaneChangeCooldownMilliseconds = 3000
+            },
+            CreateAiService(),
+            CreateTargetService().Service,
+            new FakePolicePursuitService(),
+            _lifetime);
+
+        await service.StartAsync(CancellationToken.None);
+        await service.StopAsync(CancellationToken.None);
+
+        Assert.That(_sink.ContainsMessage(
+            "[PoliceChase] Route-aware lane changing enabled: lookahead 1000.0 m, transition 60.0 m, cooldown 3000 ms"), Is.True);
+    }
+
+    [Test]
+    public async Task EnabledServiceLogsLaneChangingDisabledByConfiguration()
+    {
+        using var service = new PoliceChaseService(
+            new PoliceChaseConfiguration
+            {
+                Enabled = true,
+                PoliceCarSessionId = 7,
+                PursuitLaneChangeEnabled = false
+            },
+            CreateAiService(),
+            CreateTargetService().Service,
+            new FakePolicePursuitService(),
+            _lifetime);
+
+        await service.StartAsync(CancellationToken.None);
+        await service.StopAsync(CancellationToken.None);
+
+        Assert.That(_sink.ContainsMessage(
+            "[PoliceChase] Route-aware lane changing disabled by configuration"), Is.True);
+    }
+
+    [Test]
     public async Task DisabledServiceLogsDisabledStateWithoutInitialization()
     {
         using var service = new PoliceChaseService(

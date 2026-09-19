@@ -24,6 +24,7 @@ public class PoliceChaseConfigurationTests
             Assert.That(configuration.PursuitLaneChangeEnabled, Is.True);
             Assert.That(configuration.PursuitLaneChangeDistanceMeters, Is.EqualTo(60));
             Assert.That(configuration.PursuitLaneChangeCooldownMilliseconds, Is.EqualTo(3_000));
+            Assert.That(configuration.PursuitLaneChangeLookaheadMeters, Is.EqualTo(1_000));
         });
     }
 }

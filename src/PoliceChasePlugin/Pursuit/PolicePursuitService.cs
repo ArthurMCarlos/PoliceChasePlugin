@@ -23,6 +23,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
     private long _lastNoRouteProbeTimestamp;
     private long? _lastLoggedRouteRevision;
     private long? _lastLoggedLaneChangeRevision;
+    private LaneChangeLogSignature? _lastLaneChangeEvaluationSignature;
     private readonly Dictionary<int, bool> _loggedJunctionDecisions = new();
     private bool _routeTemporarilyLost;
 
@@ -44,7 +45,8 @@ public sealed class PolicePursuitService : IPolicePursuitService
             new PolicePursuitLaneChangeOptions(
                 configuration.PursuitLaneChangeEnabled,
                 configuration.PursuitLaneChangeDistanceMeters,
-                configuration.PursuitLaneChangeCooldownMilliseconds));
+                configuration.PursuitLaneChangeCooldownMilliseconds,
+                configuration.PursuitLaneChangeLookaheadMeters));
     }
 
     public void UpdateOnce()
@@ -250,6 +252,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
     {
         _lastLoggedRouteRevision = null;
         _lastLoggedLaneChangeRevision = null;
+        _lastLaneChangeEvaluationSignature = null;
         _loggedJunctionDecisions.Clear();
     }
 
@@ -257,11 +260,50 @@ public sealed class PolicePursuitService : IPolicePursuitService
         byte targetSessionId,
         PolicePursuitLaneChangeDiagnostics? diagnostics)
     {
-        if (diagnostics == null || _lastLoggedLaneChangeRevision == diagnostics.Revision)
+        if (diagnostics == null)
             return;
+        if (diagnostics.EventKind == PolicePursuitLaneChangeEventKind.Evaluated)
+        {
+            var signature = new LaneChangeLogSignature(
+                diagnostics.EventKind,
+                diagnostics.Reason,
+                diagnostics.PolicePointId,
+                diagnostics.PreferredPhysicalTargetPointId,
+                diagnostics.FromPointId,
+                diagnostics.ToPointId,
+                diagnostics.Direction,
+                diagnostics.JunctionId,
+                diagnostics.SafetyStatus,
+                diagnostics.RouteRevision);
+            if (_lastLaneChangeEvaluationSignature == signature)
+                return;
+            _lastLaneChangeEvaluationSignature = signature;
+        }
+        else if (_lastLoggedLaneChangeRevision == diagnostics.Revision)
+        {
+            return;
+        }
 
         switch (diagnostics.EventKind)
         {
+            case PolicePursuitLaneChangeEventKind.Evaluated:
+                var current = diagnostics.CurrentLaneRoute;
+                var candidate = diagnostics.CandidateLaneRoutes.FirstOrDefault(route =>
+                    route.PointId == diagnostics.ToPointId)
+                    ?? diagnostics.CandidateLaneRoutes.FirstOrDefault();
+                Log.Information(
+                    "[PoliceChase] Lane change evaluation: target {TargetSessionId}, policePoint {PolicePointId}, physicalTarget {PhysicalTargetPointId}, currentFailure {CurrentFailure}, currentDistance {CurrentDistanceMeters}, candidate {CandidatePointId}, candidateFailure {CandidateFailure}, junction {JunctionId}, distanceToDecision {DistanceToDecisionMeters}, reason {Reason}",
+                    targetSessionId,
+                    diagnostics.PolicePointId,
+                    diagnostics.PreferredPhysicalTargetPointId,
+                    current?.SearchFailure,
+                    current?.RouteDistanceMeters,
+                    candidate?.PointId ?? diagnostics.ToPointId,
+                    candidate?.SearchFailure,
+                    diagnostics.JunctionId,
+                    diagnostics.DistanceToDecisionMeters,
+                    diagnostics.Reason);
+                break;
             case PolicePursuitLaneChangeEventKind.Required:
                 Log.Information(
                     "[PoliceChase] Lane change required: target {TargetSessionId}, from {FromPointId}, to {ToPointId}, direction {Direction}, distanceToDecision {DistanceToDecisionMeters:0.0}",
@@ -316,8 +358,21 @@ public sealed class PolicePursuitService : IPolicePursuitService
                     nameof(diagnostics.EventKind), diagnostics.EventKind, null);
         }
 
-        _lastLoggedLaneChangeRevision = diagnostics.Revision;
+        if (diagnostics.EventKind != PolicePursuitLaneChangeEventKind.Evaluated)
+            _lastLoggedLaneChangeRevision = diagnostics.Revision;
     }
+
+    private sealed record LaneChangeLogSignature(
+        PolicePursuitLaneChangeEventKind EventKind,
+        PolicePursuitLaneChangeDiagnosticReason Reason,
+        int PolicePointId,
+        int? PreferredPhysicalTargetPointId,
+        int FromPointId,
+        int ToPointId,
+        PoliceLaneChangeDirection Direction,
+        int? JunctionId,
+        PolicePursuitLaneChangeSafetyStatus? SafetyStatus,
+        long RouteRevision);
 
     private void LogRouteTransitions(
         byte targetSessionId,

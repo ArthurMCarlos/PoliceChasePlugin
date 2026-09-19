@@ -24,16 +24,50 @@ public sealed record PolicePursuitTrackingOptions(
 public sealed record PolicePursuitLaneChangeOptions(
     bool Enabled,
     float DistanceMeters,
-    int CooldownMilliseconds);
+    int CooldownMilliseconds,
+    float LookaheadMeters = 1000);
 
 public enum PolicePursuitLaneChangeEventKind
 {
+    Evaluated,
     Required,
     Waiting,
     Started,
     Completed,
     Cancelled,
     RouteRevised
+}
+
+public enum PolicePursuitLaneChangeDiagnosticReason
+{
+    Disabled,
+    NoPhysicalTarget,
+    CurrentLaneValid,
+    NoAdjacentLane,
+    OppositeDirection,
+    NoForwardRoute,
+    NoRealJunction,
+    BeyondLookahead,
+    InsufficientPreparationDistance,
+    Cooldown,
+    ObstacleAhead,
+    ObstacleAlongside,
+    ObstacleBehind,
+    RouteRevisionChanged,
+    RoutePreparation,
+    Requested,
+    Started,
+    Completed,
+    Cancelled
+}
+
+public enum PolicePursuitLaneChangeSafetyStatus
+{
+    Safe,
+    BlockedFront,
+    BlockedSide,
+    BlockedRear,
+    BlockedRearClosing
 }
 
 public enum PoliceLaneChangeDirection
@@ -50,7 +84,27 @@ public sealed record PolicePursuitLaneChangeDiagnostics(
     PoliceLaneChangeDirection Direction,
     long RouteRevision,
     float? DistanceToDecisionMeters,
-    string? BlockingReason);
+    string? BlockingReason)
+{
+    public PolicePursuitLaneChangeDiagnosticReason Reason { get; init; }
+    public int PolicePointId { get; init; }
+    public int? PreferredPhysicalTargetPointId { get; init; }
+    public int? JunctionId { get; init; }
+    public PolicePursuitLaneChangeSafetyStatus? SafetyStatus { get; init; }
+    public PolicePursuitLaneRouteDiagnostic? CurrentLaneRoute { get; init; }
+    public IReadOnlyList<PolicePursuitLaneRouteDiagnostic> CandidateLaneRoutes { get; init; } = [];
+}
+
+public sealed record PolicePursuitLaneRouteDiagnostic(
+    int? PointId,
+    PoliceLaneChangeDirection? Direction,
+    PolicePursuitRouteSearchFailure SearchFailure,
+    float? RouteDistanceMeters,
+    float MaximumExploredDistanceMeters,
+    int JunctionEdgesExamined,
+    int? JunctionId,
+    float? DistanceToDecisionMeters,
+    PolicePursuitLaneChangeDiagnosticReason Reason);
 
 public sealed record PolicePursuitJunctionDecision(
     int JunctionId,

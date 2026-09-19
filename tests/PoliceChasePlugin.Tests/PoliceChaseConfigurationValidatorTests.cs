@@ -172,6 +172,34 @@ public class PoliceChaseConfigurationValidatorTests
             .EqualTo(nameof(PoliceChaseConfiguration.PursuitLaneChangeCooldownMilliseconds)));
     }
 
+    [TestCase(99)]
+    [TestCase(5001)]
+    [TestCase(float.NaN)]
+    [TestCase(float.PositiveInfinity)]
+    public void RejectsInvalidLaneChangeLookahead(float value)
+    {
+        var result = _validator.Validate(new PoliceChaseConfiguration
+        {
+            PursuitLaneChangeLookaheadMeters = value
+        });
+
+        Assert.That(result.Errors, Has.Some.Property("PropertyName")
+            .EqualTo(nameof(PoliceChaseConfiguration.PursuitLaneChangeLookaheadMeters)));
+    }
+
+    [Test]
+    public void RejectsLaneChangeLookaheadShorterThanTransition()
+    {
+        var result = _validator.Validate(new PoliceChaseConfiguration
+        {
+            PursuitLaneChangeDistanceMeters = 120,
+            PursuitLaneChangeLookaheadMeters = 100
+        });
+
+        Assert.That(result.Errors, Has.Some.Property("PropertyName")
+            .EqualTo(nameof(PoliceChaseConfiguration.PursuitLaneChangeLookaheadMeters)));
+    }
+
     [TestCase(-1)]
     [TestCase(255)]
     public void RejectsInvalidPoliceSessionIdWhenEnabled(int sessionId)

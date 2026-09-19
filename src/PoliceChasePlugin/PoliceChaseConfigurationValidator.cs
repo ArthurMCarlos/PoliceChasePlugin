@@ -36,5 +36,10 @@ public class PoliceChaseConfigurationValidator : AbstractValidator<PoliceChaseCo
             .InclusiveBetween(20, 200);
         RuleFor(configuration => configuration.PursuitLaneChangeCooldownMilliseconds)
             .InclusiveBetween(0, 30_000);
+        RuleFor(configuration => configuration.PursuitLaneChangeLookaheadMeters)
+            .Must(float.IsFinite)
+            .InclusiveBetween(100, 5_000)
+            .GreaterThanOrEqualTo(configuration =>
+                configuration.PursuitLaneChangeDistanceMeters);
     }
 }

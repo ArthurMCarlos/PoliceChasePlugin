@@ -11,6 +11,10 @@ using CoreLaneChangeOptions = AssettoServer.Server.Ai.AiPursuitLaneChangeOptions
 using CoreLaneChangeDiagnostics = AssettoServer.Server.Ai.AiPursuitLaneChangeDiagnostics;
 using CoreLaneChangeEventKind = AssettoServer.Server.Ai.AiPursuitLaneChangeEventKind;
 using CoreLaneChangeDirection = AssettoServer.Server.Ai.Routing.AiLaneChangeDirection;
+using CoreLaneChangeReason = AssettoServer.Server.Ai.AiPursuitLaneChangeDiagnosticReason;
+using CoreLaneChangeSafetyStatus = AssettoServer.Server.Ai.AiLaneChangeSafetyStatus;
+using CoreLaneRouteDiagnostic = AssettoServer.Server.Ai.Routing.AiPursuitLaneRouteDiagnostic;
+using CoreLaneEvaluationReason = AssettoServer.Server.Ai.Routing.AiPursuitLaneEvaluationReason;
 
 namespace PoliceChasePlugin.Ai;
 
@@ -62,7 +66,8 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
                 : new CoreLaneChangeOptions(
                     options.LaneChange.Enabled,
                     options.LaneChange.DistanceMeters,
-                    options.LaneChange.CooldownMilliseconds)));
+                    options.LaneChange.CooldownMilliseconds,
+                    options.LaneChange.LookaheadMeters)));
         return new PolicePursuitTrackingResult(
             MapStatus(result.Status),
             result.RouteDistanceMeters,
@@ -98,7 +103,7 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
 
     internal static PolicePursuitRouteDiagnostics MapDiagnostics(
         CoreRouteDiagnostics diagnostics) =>
-        new(
+        new PolicePursuitRouteDiagnostics(
             diagnostics.Revision,
             MapUpdateKind(diagnostics.UpdateKind),
             diagnostics.PolicePointId,
@@ -132,7 +137,7 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
 
     internal static PolicePursuitLaneChangeDiagnostics MapLaneChangeDiagnostics(
         CoreLaneChangeDiagnostics diagnostics) =>
-        new(
+        new PolicePursuitLaneChangeDiagnostics(
             diagnostics.Revision,
             MapLaneChangeEventKind(diagnostics.EventKind),
             diagnostics.FromPointId,
@@ -140,12 +145,43 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             MapLaneChangeDirection(diagnostics.Direction),
             diagnostics.RouteRevision,
             diagnostics.DistanceToDecisionMeters,
-            diagnostics.BlockingReason);
+            diagnostics.BlockingReason)
+        {
+            Reason = MapLaneChangeReason(diagnostics.Reason),
+            PolicePointId = diagnostics.PolicePointId,
+            PreferredPhysicalTargetPointId = diagnostics.PreferredPhysicalTargetPointId,
+            JunctionId = diagnostics.JunctionId,
+            SafetyStatus = diagnostics.SafetyStatus.HasValue
+                ? MapLaneChangeSafetyStatus(diagnostics.SafetyStatus.Value)
+                : null,
+            CurrentLaneRoute = diagnostics.CurrentLaneRoute == null
+                ? null
+                : MapLaneRouteDiagnostic(diagnostics.CurrentLaneRoute),
+            CandidateLaneRoutes = diagnostics.CandidateLaneRoutes
+                .Select(MapLaneRouteDiagnostic)
+                .ToArray()
+        };
+
+    private static PolicePursuitLaneRouteDiagnostic MapLaneRouteDiagnostic(
+        CoreLaneRouteDiagnostic diagnostic) =>
+        new(
+            diagnostic.PointId,
+            diagnostic.Direction.HasValue
+                ? MapLaneChangeDirection(diagnostic.Direction.Value)
+                : null,
+            MapSearchFailure(diagnostic.SearchFailure),
+            diagnostic.RouteDistanceMeters,
+            diagnostic.MaximumExploredDistanceMeters,
+            diagnostic.JunctionEdgesExamined,
+            diagnostic.JunctionId,
+            diagnostic.DistanceToDecisionMeters,
+            MapLaneEvaluationReason(diagnostic.Reason));
 
     private static PolicePursuitLaneChangeEventKind MapLaneChangeEventKind(
         CoreLaneChangeEventKind eventKind) =>
         eventKind switch
         {
+            CoreLaneChangeEventKind.Evaluated => PolicePursuitLaneChangeEventKind.Evaluated,
             CoreLaneChangeEventKind.Required => PolicePursuitLaneChangeEventKind.Required,
             CoreLaneChangeEventKind.Waiting => PolicePursuitLaneChangeEventKind.Waiting,
             CoreLaneChangeEventKind.Started => PolicePursuitLaneChangeEventKind.Started,
@@ -153,6 +189,59 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             CoreLaneChangeEventKind.Cancelled => PolicePursuitLaneChangeEventKind.Cancelled,
             CoreLaneChangeEventKind.RouteRevised => PolicePursuitLaneChangeEventKind.RouteRevised,
             _ => throw new ArgumentOutOfRangeException(nameof(eventKind), eventKind, null)
+        };
+
+    private static PolicePursuitLaneChangeDiagnosticReason MapLaneChangeReason(
+        CoreLaneChangeReason reason) =>
+        reason switch
+        {
+            CoreLaneChangeReason.Disabled => PolicePursuitLaneChangeDiagnosticReason.Disabled,
+            CoreLaneChangeReason.NoPhysicalTarget => PolicePursuitLaneChangeDiagnosticReason.NoPhysicalTarget,
+            CoreLaneChangeReason.CurrentLaneValid => PolicePursuitLaneChangeDiagnosticReason.CurrentLaneValid,
+            CoreLaneChangeReason.NoAdjacentLane => PolicePursuitLaneChangeDiagnosticReason.NoAdjacentLane,
+            CoreLaneChangeReason.OppositeDirection => PolicePursuitLaneChangeDiagnosticReason.OppositeDirection,
+            CoreLaneChangeReason.NoForwardRoute => PolicePursuitLaneChangeDiagnosticReason.NoForwardRoute,
+            CoreLaneChangeReason.NoRealJunction => PolicePursuitLaneChangeDiagnosticReason.NoRealJunction,
+            CoreLaneChangeReason.BeyondLookahead => PolicePursuitLaneChangeDiagnosticReason.BeyondLookahead,
+            CoreLaneChangeReason.InsufficientPreparationDistance => PolicePursuitLaneChangeDiagnosticReason.InsufficientPreparationDistance,
+            CoreLaneChangeReason.Cooldown => PolicePursuitLaneChangeDiagnosticReason.Cooldown,
+            CoreLaneChangeReason.ObstacleAhead => PolicePursuitLaneChangeDiagnosticReason.ObstacleAhead,
+            CoreLaneChangeReason.ObstacleAlongside => PolicePursuitLaneChangeDiagnosticReason.ObstacleAlongside,
+            CoreLaneChangeReason.ObstacleBehind => PolicePursuitLaneChangeDiagnosticReason.ObstacleBehind,
+            CoreLaneChangeReason.RouteRevisionChanged => PolicePursuitLaneChangeDiagnosticReason.RouteRevisionChanged,
+            CoreLaneChangeReason.RoutePreparation => PolicePursuitLaneChangeDiagnosticReason.RoutePreparation,
+            CoreLaneChangeReason.Requested => PolicePursuitLaneChangeDiagnosticReason.Requested,
+            CoreLaneChangeReason.Started => PolicePursuitLaneChangeDiagnosticReason.Started,
+            CoreLaneChangeReason.Completed => PolicePursuitLaneChangeDiagnosticReason.Completed,
+            CoreLaneChangeReason.Cancelled => PolicePursuitLaneChangeDiagnosticReason.Cancelled,
+            _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null)
+        };
+
+    private static PolicePursuitLaneChangeSafetyStatus MapLaneChangeSafetyStatus(
+        CoreLaneChangeSafetyStatus status) =>
+        status switch
+        {
+            CoreLaneChangeSafetyStatus.Safe => PolicePursuitLaneChangeSafetyStatus.Safe,
+            CoreLaneChangeSafetyStatus.BlockedFront => PolicePursuitLaneChangeSafetyStatus.BlockedFront,
+            CoreLaneChangeSafetyStatus.BlockedSide => PolicePursuitLaneChangeSafetyStatus.BlockedSide,
+            CoreLaneChangeSafetyStatus.BlockedRear => PolicePursuitLaneChangeSafetyStatus.BlockedRear,
+            CoreLaneChangeSafetyStatus.BlockedRearClosing => PolicePursuitLaneChangeSafetyStatus.BlockedRearClosing,
+            _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
+        };
+
+    private static PolicePursuitLaneChangeDiagnosticReason MapLaneEvaluationReason(
+        CoreLaneEvaluationReason reason) =>
+        reason switch
+        {
+            CoreLaneEvaluationReason.CurrentLaneValid => PolicePursuitLaneChangeDiagnosticReason.CurrentLaneValid,
+            CoreLaneEvaluationReason.NoAdjacentLane => PolicePursuitLaneChangeDiagnosticReason.NoAdjacentLane,
+            CoreLaneEvaluationReason.OppositeDirection => PolicePursuitLaneChangeDiagnosticReason.OppositeDirection,
+            CoreLaneEvaluationReason.NoForwardRoute => PolicePursuitLaneChangeDiagnosticReason.NoForwardRoute,
+            CoreLaneEvaluationReason.NoRealJunction => PolicePursuitLaneChangeDiagnosticReason.NoRealJunction,
+            CoreLaneEvaluationReason.BeyondLookahead => PolicePursuitLaneChangeDiagnosticReason.BeyondLookahead,
+            CoreLaneEvaluationReason.InsufficientPreparationDistance => PolicePursuitLaneChangeDiagnosticReason.InsufficientPreparationDistance,
+            CoreLaneEvaluationReason.RoutePreparation => PolicePursuitLaneChangeDiagnosticReason.RoutePreparation,
+            _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null)
         };
 
     private static PoliceLaneChangeDirection MapLaneChangeDirection(

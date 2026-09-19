@@ -20,4 +20,5 @@ public class PoliceChaseConfiguration : IValidateConfiguration<PoliceChaseConfig
     public bool PursuitLaneChangeEnabled { get; set; } = true;
     public float PursuitLaneChangeDistanceMeters { get; set; } = 60;
     public int PursuitLaneChangeCooldownMilliseconds { get; set; } = 3_000;
+    public float PursuitLaneChangeLookaheadMeters { get; set; } = 1_000;
 }
