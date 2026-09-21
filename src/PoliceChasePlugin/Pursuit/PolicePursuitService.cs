@@ -297,10 +297,9 @@ public sealed class PolicePursuitService : IPolicePursuitService
                     route.PointId == diagnostics.ToPointId)
                     ?? diagnostics.CandidateLaneRoutes.FirstOrDefault();
                 Log.Information(
-                    "[PoliceChase] Lane change evaluation: target {TargetSessionId}, motivation {Motivation}, relation {PhysicalRelation}, policePoint {PolicePointId}, physicalTarget {PhysicalTargetPointId}, currentFailure {CurrentFailure}, currentDistance {CurrentDistanceMeters}, candidate {CandidatePointId}, candidateFailure {CandidateFailure}, junction {JunctionId}, distanceToDecision {DistanceToDecisionMeters}, reason {Reason}",
+                    "[PoliceChase] Lane change evaluation: target {TargetSessionId}{LaneContext:l}, policePoint {PolicePointId}, physicalTarget {PhysicalTargetPointId}, currentFailure {CurrentFailure}, currentDistance {CurrentDistanceMeters}, candidate {CandidatePointId}, candidateFailure {CandidateFailure}, junction {JunctionId}, distanceToDecision {DistanceToDecisionMeters}, reason {Reason}",
                     targetSessionId,
-                    diagnostics.Motivation,
-                    diagnostics.PhysicalRelation,
+                    laneContext,
                     diagnostics.PolicePointId,
                     diagnostics.PreferredPhysicalTargetPointId,
                     current?.SearchFailure,
