@@ -410,6 +410,74 @@ public class PolicePursuitServiceTests
     }
 
     [Test]
+    public void AlignmentEvaluationLogsOnceUntilItsMotivationChanges()
+    {
+        var context = CreateContext();
+        var alignment = EvaluationDiagnostics(
+            1,
+            PolicePursuitLaneChangeDiagnosticReason.RoutePreparation,
+            null,
+            95) with
+        {
+            Motivation = PolicePursuitLaneMotivation.TargetLaneAlignment,
+            PhysicalRelation = PolicePursuitLanePhysicalRelation.ImmediateLeft
+        };
+        context.State.Enqueue(ActiveResult(laneChange: alignment));
+        context.State.Enqueue(ActiveResult(laneChange: alignment with
+        {
+            Revision = 2,
+            DistanceToDecisionMeters = 93
+        }));
+        context.State.Enqueue(ActiveResult(laneChange: alignment with
+        {
+            Revision = 3,
+            DistanceToDecisionMeters = 93,
+            Motivation = PolicePursuitLaneMotivation.FutureJunction
+        }));
+
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(LogCount("Lane change evaluation"), Is.EqualTo(2));
+            Assert.That(_sink.Events.Any(e =>
+                e.RenderMessage().Contains("TargetLaneAlignment")), Is.True);
+        });
+    }
+
+    [Test]
+    public void AlignmentLifecycleLogKeepsMotivationAndRelation()
+    {
+        var context = CreateContext();
+        context.State.Enqueue(ActiveResult(laneChange:
+            new PolicePursuitLaneChangeDiagnostics(
+                1,
+                PolicePursuitLaneChangeEventKind.Required,
+                171761,
+                283881,
+                PoliceLaneChangeDirection.Left,
+                6,
+                94.6f)
+            {
+                Reason = PolicePursuitLaneChangeDiagnosticReason.Requested,
+                Motivation = PolicePursuitLaneMotivation.TargetLaneAlignment,
+                PhysicalRelation = PolicePursuitLanePhysicalRelation.ImmediateLeft
+            }));
+
+        context.Service.UpdateOnce();
+
+        var message = _sink.Events.Single(e =>
+            e.RenderMessage().Contains("Lane change required")).RenderMessage();
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("TargetLaneAlignment"));
+            Assert.That(message, Does.Contain("ImmediateLeft"));
+        });
+    }
+
+    [Test]
     public void TemporaryRouteLossStillLogsLaneChangeLifecycleEvent()
     {
         var context = CreateContext();
@@ -475,7 +543,7 @@ public class PolicePursuitServiceTests
     private static PolicePursuitLaneChangeDiagnostics EvaluationDiagnostics(
         long revision,
         PolicePursuitLaneChangeDiagnosticReason reason,
-        int junctionId,
+        int? junctionId,
         float distanceToDecision) =>
         new(
             revision,

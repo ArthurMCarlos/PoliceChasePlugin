@@ -44,7 +44,9 @@ public enum PolicePursuitLaneChangeDiagnosticReason
     NoPhysicalTarget,
     CurrentLaneValid,
     NoAdjacentLane,
+    NonAdjacent,
     OppositeDirection,
+    InvalidGeometry,
     NoForwardRoute,
     NoRealJunction,
     BeyondLookahead,
@@ -59,6 +61,22 @@ public enum PolicePursuitLaneChangeDiagnosticReason
     Started,
     Completed,
     Cancelled
+}
+
+public enum PolicePursuitLaneMotivation
+{
+    FutureJunction,
+    TargetLaneAlignment
+}
+
+public enum PolicePursuitLanePhysicalRelation
+{
+    SameLane,
+    ImmediateLeft,
+    ImmediateRight,
+    NonAdjacent,
+    OppositeDirection,
+    InvalidGeometry
 }
 
 public enum PolicePursuitLaneChangeSafetyStatus
@@ -89,6 +107,8 @@ public sealed record PolicePursuitLaneChangeDiagnostics(
     public int PolicePointId { get; init; }
     public int? PreferredPhysicalTargetPointId { get; init; }
     public int? JunctionId { get; init; }
+    public PolicePursuitLaneMotivation? Motivation { get; init; }
+    public PolicePursuitLanePhysicalRelation? PhysicalRelation { get; init; }
     public PolicePursuitLaneChangeSafetyStatus? SafetyStatus { get; init; }
     public PolicePursuitLaneRouteDiagnostic? CurrentLaneRoute { get; init; }
     public IReadOnlyList<PolicePursuitLaneRouteDiagnostic> CandidateLaneRoutes { get; init; } = [];
@@ -103,7 +123,10 @@ public sealed record PolicePursuitLaneRouteDiagnostic(
     int JunctionEdgesExamined,
     int? JunctionId,
     float? DistanceToDecisionMeters,
-    PolicePursuitLaneChangeDiagnosticReason Reason);
+    PolicePursuitLaneChangeDiagnosticReason Reason)
+{
+    public PolicePursuitLanePhysicalRelation? PhysicalRelation { get; init; }
+}
 
 public sealed record PolicePursuitJunctionDecision(
     int JunctionId,

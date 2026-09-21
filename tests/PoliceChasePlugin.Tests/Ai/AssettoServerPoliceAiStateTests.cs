@@ -13,6 +13,8 @@ using CoreLaneChangeReason = AssettoServer.Server.Ai.AiPursuitLaneChangeDiagnost
 using CoreLaneChangeSafety = AssettoServer.Server.Ai.AiLaneChangeSafetyStatus;
 using CoreLaneRouteDiagnostic = AssettoServer.Server.Ai.Routing.AiPursuitLaneRouteDiagnostic;
 using CoreLaneEvaluationReason = AssettoServer.Server.Ai.Routing.AiPursuitLaneEvaluationReason;
+using CoreLaneMotivation = AssettoServer.Server.Ai.Routing.AiPursuitLaneMotivation;
+using CoreLanePhysicalRelation = AssettoServer.Server.Ai.Routing.AiPursuitLanePhysicalRelation;
 using PoliceChasePlugin.Ai;
 
 namespace PoliceChasePlugin.Tests.Ai;
@@ -220,6 +222,36 @@ public class AssettoServerPoliceAiStateTests
             Assert.That(mapped.CurrentLaneRoute.MaximumExploredDistanceMeters,
                 Is.EqualTo(19_999));
             Assert.That(mapped.CandidateLaneRoutes.Single().JunctionId, Is.EqualTo(2));
+        });
+    }
+
+    [Test]
+    public void MapsDirectAlignmentDiagnosticWithoutInventingJunction()
+    {
+        var mapped = AssettoServerNativePolicePursuitState.MapLaneChangeDiagnostics(
+            new CoreLaneChangeDiagnostics(
+                10,
+                CoreLaneChangeEventKind.Evaluated,
+                171761,
+                283881,
+                CoreLaneChangeDirection.Left,
+                6,
+                94.6f)
+            {
+                Reason = CoreLaneChangeReason.RoutePreparation,
+                PolicePointId = 171761,
+                PreferredPhysicalTargetPointId = 283943,
+                Motivation = CoreLaneMotivation.TargetLaneAlignment,
+                PhysicalRelation = CoreLanePhysicalRelation.ImmediateLeft
+            });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(mapped.Motivation,
+                Is.EqualTo(PolicePursuitLaneMotivation.TargetLaneAlignment));
+            Assert.That(mapped.PhysicalRelation,
+                Is.EqualTo(PolicePursuitLanePhysicalRelation.ImmediateLeft));
+            Assert.That(mapped.JunctionId, Is.Null);
         });
     }
 

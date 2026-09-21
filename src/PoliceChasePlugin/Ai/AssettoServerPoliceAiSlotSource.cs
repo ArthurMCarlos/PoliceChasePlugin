@@ -15,6 +15,8 @@ using CoreLaneChangeReason = AssettoServer.Server.Ai.AiPursuitLaneChangeDiagnost
 using CoreLaneChangeSafetyStatus = AssettoServer.Server.Ai.AiLaneChangeSafetyStatus;
 using CoreLaneRouteDiagnostic = AssettoServer.Server.Ai.Routing.AiPursuitLaneRouteDiagnostic;
 using CoreLaneEvaluationReason = AssettoServer.Server.Ai.Routing.AiPursuitLaneEvaluationReason;
+using CoreLaneMotivation = AssettoServer.Server.Ai.Routing.AiPursuitLaneMotivation;
+using CoreLanePhysicalRelation = AssettoServer.Server.Ai.Routing.AiPursuitLanePhysicalRelation;
 
 namespace PoliceChasePlugin.Ai;
 
@@ -152,6 +154,12 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             PolicePointId = diagnostics.PolicePointId,
             PreferredPhysicalTargetPointId = diagnostics.PreferredPhysicalTargetPointId,
             JunctionId = diagnostics.JunctionId,
+            Motivation = diagnostics.Motivation.HasValue
+                ? MapLaneMotivation(diagnostics.Motivation.Value)
+                : null,
+            PhysicalRelation = diagnostics.PhysicalRelation.HasValue
+                ? MapLanePhysicalRelation(diagnostics.PhysicalRelation.Value)
+                : null,
             SafetyStatus = diagnostics.SafetyStatus.HasValue
                 ? MapLaneChangeSafetyStatus(diagnostics.SafetyStatus.Value)
                 : null,
@@ -165,7 +173,7 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
 
     private static PolicePursuitLaneRouteDiagnostic MapLaneRouteDiagnostic(
         CoreLaneRouteDiagnostic diagnostic) =>
-        new(
+        new PolicePursuitLaneRouteDiagnostic(
             diagnostic.PointId,
             diagnostic.Direction.HasValue
                 ? MapLaneChangeDirection(diagnostic.Direction.Value)
@@ -176,7 +184,12 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             diagnostic.JunctionEdgesExamined,
             diagnostic.JunctionId,
             diagnostic.DistanceToDecisionMeters,
-            MapLaneEvaluationReason(diagnostic.Reason));
+            MapLaneEvaluationReason(diagnostic.Reason))
+        {
+            PhysicalRelation = diagnostic.PhysicalRelation.HasValue
+                ? MapLanePhysicalRelation(diagnostic.PhysicalRelation.Value)
+                : null
+        };
 
     private static PolicePursuitLaneChangeEventKind MapLaneChangeEventKind(
         CoreLaneChangeEventKind eventKind) =>
@@ -200,7 +213,9 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             CoreLaneChangeReason.NoPhysicalTarget => PolicePursuitLaneChangeDiagnosticReason.NoPhysicalTarget,
             CoreLaneChangeReason.CurrentLaneValid => PolicePursuitLaneChangeDiagnosticReason.CurrentLaneValid,
             CoreLaneChangeReason.NoAdjacentLane => PolicePursuitLaneChangeDiagnosticReason.NoAdjacentLane,
+            CoreLaneChangeReason.NonAdjacent => PolicePursuitLaneChangeDiagnosticReason.NonAdjacent,
             CoreLaneChangeReason.OppositeDirection => PolicePursuitLaneChangeDiagnosticReason.OppositeDirection,
+            CoreLaneChangeReason.InvalidGeometry => PolicePursuitLaneChangeDiagnosticReason.InvalidGeometry,
             CoreLaneChangeReason.NoForwardRoute => PolicePursuitLaneChangeDiagnosticReason.NoForwardRoute,
             CoreLaneChangeReason.NoRealJunction => PolicePursuitLaneChangeDiagnosticReason.NoRealJunction,
             CoreLaneChangeReason.BeyondLookahead => PolicePursuitLaneChangeDiagnosticReason.BeyondLookahead,
@@ -236,7 +251,9 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
         {
             CoreLaneEvaluationReason.CurrentLaneValid => PolicePursuitLaneChangeDiagnosticReason.CurrentLaneValid,
             CoreLaneEvaluationReason.NoAdjacentLane => PolicePursuitLaneChangeDiagnosticReason.NoAdjacentLane,
+            CoreLaneEvaluationReason.NonAdjacent => PolicePursuitLaneChangeDiagnosticReason.NonAdjacent,
             CoreLaneEvaluationReason.OppositeDirection => PolicePursuitLaneChangeDiagnosticReason.OppositeDirection,
+            CoreLaneEvaluationReason.InvalidGeometry => PolicePursuitLaneChangeDiagnosticReason.InvalidGeometry,
             CoreLaneEvaluationReason.NoForwardRoute => PolicePursuitLaneChangeDiagnosticReason.NoForwardRoute,
             CoreLaneEvaluationReason.NoRealJunction => PolicePursuitLaneChangeDiagnosticReason.NoRealJunction,
             CoreLaneEvaluationReason.BeyondLookahead => PolicePursuitLaneChangeDiagnosticReason.BeyondLookahead,
@@ -244,6 +261,30 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             CoreLaneEvaluationReason.RoutePreparation => PolicePursuitLaneChangeDiagnosticReason.RoutePreparation,
             CoreLaneEvaluationReason.Cooldown => PolicePursuitLaneChangeDiagnosticReason.Cooldown,
             _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null)
+        };
+
+    private static PolicePursuitLaneMotivation MapLaneMotivation(
+        CoreLaneMotivation motivation) =>
+        motivation switch
+        {
+            CoreLaneMotivation.FutureJunction =>
+                PolicePursuitLaneMotivation.FutureJunction,
+            CoreLaneMotivation.TargetLaneAlignment =>
+                PolicePursuitLaneMotivation.TargetLaneAlignment,
+            _ => throw new ArgumentOutOfRangeException(nameof(motivation), motivation, null)
+        };
+
+    private static PolicePursuitLanePhysicalRelation MapLanePhysicalRelation(
+        CoreLanePhysicalRelation relation) =>
+        relation switch
+        {
+            CoreLanePhysicalRelation.SameLane => PolicePursuitLanePhysicalRelation.SameLane,
+            CoreLanePhysicalRelation.ImmediateLeft => PolicePursuitLanePhysicalRelation.ImmediateLeft,
+            CoreLanePhysicalRelation.ImmediateRight => PolicePursuitLanePhysicalRelation.ImmediateRight,
+            CoreLanePhysicalRelation.NonAdjacent => PolicePursuitLanePhysicalRelation.NonAdjacent,
+            CoreLanePhysicalRelation.OppositeDirection => PolicePursuitLanePhysicalRelation.OppositeDirection,
+            CoreLanePhysicalRelation.InvalidGeometry => PolicePursuitLanePhysicalRelation.InvalidGeometry,
+            _ => throw new ArgumentOutOfRangeException(nameof(relation), relation, null)
         };
 
     private static PoliceLaneChangeDirection MapLaneChangeDirection(
