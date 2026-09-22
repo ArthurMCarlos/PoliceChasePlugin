@@ -113,15 +113,16 @@ Após completion ou cancelamento, o cooldown existente impede uma troca inversa 
 
 Para `FutureJunction`, a distância de decisão permanece a distância até a primeira junction relevante.
 
-Para `TargetLaneAlignment`, a referência será a distância forward da rota candidata até a âncora física do alvo. A candidata precisa:
+Para `TargetLaneAlignment`, a distância forward da rota candidata até a âncora física do alvo mede alcançabilidade e prioridade, não o espaço disponível para a transição. A candidata precisa:
 
 - produzir uma rota válida;
 - não exigir reverse;
 - ficar dentro do lookahead configurado;
-- oferecer distância suficiente para a trajetória física;
+- oferecer rota válida até a âncora mesmo quando essa distância for menor que a trajetória física;
+- possuir, nas cadeias físicas de origem e destino, espaço forward suficiente para a trajetória lateral;
 - não piorar de forma definitiva a alcançabilidade do alvo.
 
-Nos três casos reais, aproximadamente 95 metros atendem ao lookahead de 1.000 metros e à trajetória física de 60 metros.
+Nos três casos inicialmente automatizados, aproximadamente 95 metros atendiam ao lookahead de 1.000 metros. O teste real posterior demonstrou o caso de fronteira: quando a âncora já está na faixa adjacente, a rota até ela pode ser próxima de zero, enquanto as duas splines ainda possuem os 60 metros necessários à transição. Por isso, `TargetLaneAlignment` não possui `DistanceToDecisionMeters`; esse campo permanece reservado para `FutureJunction`.
 
 Uma rota atual válida não impede o alinhamento, mas uma candidata sem rota útil é rejeitada. Assim, a polícia busca a faixa do jogador sem sacrificar a continuidade da perseguição.
 
@@ -152,6 +153,7 @@ O diagnóstico tipado deverá mostrar, sem spam:
 - próxima vizinha selecionada;
 - motivação `TargetLaneAlignment` ou `FutureJunction`;
 - resultado e distância das rotas atual e candidata;
+- distância exigida da transição e distância física disponível nas cadeias de origem e destino;
 - junction relevante, quando houver;
 - estado de histerese e cooldown;
 - resultado da safety;
@@ -170,7 +172,8 @@ Usando o `fast_lane.aip` real:
 - `171763 -> 283883 -> 283945` seleciona alinhamento direto sem junction;
 - `171765 -> 283885 -> 283947` seleciona alinhamento direto sem junction;
 - cada candidata é confirmada como vizinha imediata, recíproca e de mesmo sentido;
-- a distância da rota candidata permanece dentro da janela;
+- a distância da rota candidata permanece abaixo do lookahead, sem mínimo artificial;
+- origem e destino possuem espaço físico suficiente para a transição configurada;
 - a ausência de junction não produz `NoRealJunction` para `TargetLaneAlignment`.
 
 ### Comportamento stateful

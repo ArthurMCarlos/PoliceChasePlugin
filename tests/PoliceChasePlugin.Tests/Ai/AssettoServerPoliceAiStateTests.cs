@@ -203,7 +203,13 @@ public class AssettoServerPoliceAiStateTests
                     2,
                     420,
                     CoreLaneEvaluationReason.RoutePreparation)
-            ]
+                {
+                    Motivation = CoreLaneMotivation.FutureJunction
+                }
+            ],
+            RequiredTransitionDistanceMeters = 60,
+            SourceAvailableDistanceMeters = 50,
+            DestinationAvailableDistanceMeters = 60
         };
 
         var mapped = AssettoServerNativePolicePursuitState.MapLaneChangeDiagnostics(core);
@@ -222,6 +228,11 @@ public class AssettoServerPoliceAiStateTests
             Assert.That(mapped.CurrentLaneRoute.MaximumExploredDistanceMeters,
                 Is.EqualTo(19_999));
             Assert.That(mapped.CandidateLaneRoutes.Single().JunctionId, Is.EqualTo(2));
+            Assert.That(mapped.CandidateLaneRoutes.Single().Motivation,
+                Is.EqualTo(PolicePursuitLaneMotivation.FutureJunction));
+            Assert.That(mapped.RequiredTransitionDistanceMeters, Is.EqualTo(60));
+            Assert.That(mapped.SourceAvailableDistanceMeters, Is.EqualTo(50));
+            Assert.That(mapped.DestinationAvailableDistanceMeters, Is.EqualTo(60));
         });
     }
 
@@ -236,7 +247,7 @@ public class AssettoServerPoliceAiStateTests
                 283881,
                 CoreLaneChangeDirection.Left,
                 6,
-                94.6f)
+                null)
             {
                 Reason = CoreLaneChangeReason.RoutePreparation,
                 PolicePointId = 171761,
@@ -252,6 +263,7 @@ public class AssettoServerPoliceAiStateTests
             Assert.That(mapped.PhysicalRelation,
                 Is.EqualTo(PolicePursuitLanePhysicalRelation.ImmediateLeft));
             Assert.That(mapped.JunctionId, Is.Null);
+            Assert.That(mapped.DistanceToDecisionMeters, Is.Null);
         });
     }
 

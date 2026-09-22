@@ -168,7 +168,10 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
                 : MapLaneRouteDiagnostic(diagnostics.CurrentLaneRoute),
             CandidateLaneRoutes = diagnostics.CandidateLaneRoutes
                 .Select(MapLaneRouteDiagnostic)
-                .ToArray()
+                .ToArray(),
+            RequiredTransitionDistanceMeters = diagnostics.RequiredTransitionDistanceMeters,
+            SourceAvailableDistanceMeters = diagnostics.SourceAvailableDistanceMeters,
+            DestinationAvailableDistanceMeters = diagnostics.DestinationAvailableDistanceMeters
         };
 
     private static PolicePursuitLaneRouteDiagnostic MapLaneRouteDiagnostic(
@@ -188,6 +191,9 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
         {
             PhysicalRelation = diagnostic.PhysicalRelation.HasValue
                 ? MapLanePhysicalRelation(diagnostic.PhysicalRelation.Value)
+                : null,
+            Motivation = diagnostic.Motivation.HasValue
+                ? MapLaneMotivation(diagnostic.Motivation.Value)
                 : null
         };
 

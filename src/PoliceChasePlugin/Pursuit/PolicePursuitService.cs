@@ -297,7 +297,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
                     route.PointId == diagnostics.ToPointId)
                     ?? diagnostics.CandidateLaneRoutes.FirstOrDefault();
                 Log.Information(
-                    "[PoliceChase] Lane change evaluation: target {TargetSessionId}{LaneContext:l}, policePoint {PolicePointId}, physicalTarget {PhysicalTargetPointId}, currentFailure {CurrentFailure}, currentDistance {CurrentDistanceMeters}, candidate {CandidatePointId}, candidateFailure {CandidateFailure}, junction {JunctionId}, distanceToDecision {DistanceToDecisionMeters}, reason {Reason}",
+                    "[PoliceChase] Lane change evaluation: target {TargetSessionId}{LaneContext:l}, policePoint {PolicePointId}, physicalTarget {PhysicalTargetPointId}, currentFailure {CurrentFailure}, currentDistance {CurrentDistanceMeters}, candidate {CandidatePointId}, candidateFailure {CandidateFailure}, routeToTarget {CandidateRouteDistanceMeters}, junction {JunctionId}, distanceToDecision {DistanceToDecisionMeters}, requiredTransition {RequiredTransitionDistanceMeters}, sourceAvailable {SourceAvailableDistanceMeters}, destinationAvailable {DestinationAvailableDistanceMeters}, reason {Reason}",
                     targetSessionId,
                     laneContext,
                     diagnostics.PolicePointId,
@@ -306,8 +306,12 @@ public sealed class PolicePursuitService : IPolicePursuitService
                     current?.RouteDistanceMeters,
                     candidate?.PointId ?? diagnostics.ToPointId,
                     candidate?.SearchFailure,
+                    candidate?.RouteDistanceMeters,
                     diagnostics.JunctionId,
                     diagnostics.DistanceToDecisionMeters,
+                    diagnostics.RequiredTransitionDistanceMeters,
+                    diagnostics.SourceAvailableDistanceMeters,
+                    diagnostics.DestinationAvailableDistanceMeters,
                     diagnostics.Reason);
                 break;
             case PolicePursuitLaneChangeEventKind.Required:

@@ -112,6 +112,9 @@ public sealed record PolicePursuitLaneChangeDiagnostics(
     public PolicePursuitLaneChangeSafetyStatus? SafetyStatus { get; init; }
     public PolicePursuitLaneRouteDiagnostic? CurrentLaneRoute { get; init; }
     public IReadOnlyList<PolicePursuitLaneRouteDiagnostic> CandidateLaneRoutes { get; init; } = [];
+    public float? RequiredTransitionDistanceMeters { get; init; }
+    public float? SourceAvailableDistanceMeters { get; init; }
+    public float? DestinationAvailableDistanceMeters { get; init; }
 }
 
 public sealed record PolicePursuitLaneRouteDiagnostic(
@@ -126,6 +129,7 @@ public sealed record PolicePursuitLaneRouteDiagnostic(
     PolicePursuitLaneChangeDiagnosticReason Reason)
 {
     public PolicePursuitLanePhysicalRelation? PhysicalRelation { get; init; }
+    public PolicePursuitLaneMotivation? Motivation { get; init; }
 }
 
 public sealed record PolicePursuitJunctionDecision(

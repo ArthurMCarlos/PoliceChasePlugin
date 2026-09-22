@@ -417,21 +417,38 @@ public class PolicePursuitServiceTests
             1,
             PolicePursuitLaneChangeDiagnosticReason.RoutePreparation,
             null,
-            95) with
+            0) with
         {
+            DistanceToDecisionMeters = null,
             Motivation = PolicePursuitLaneMotivation.TargetLaneAlignment,
-            PhysicalRelation = PolicePursuitLanePhysicalRelation.ImmediateLeft
+            PhysicalRelation = PolicePursuitLanePhysicalRelation.ImmediateLeft,
+            CandidateLaneRoutes =
+            [
+                new PolicePursuitLaneRouteDiagnostic(
+                    175784,
+                    PoliceLaneChangeDirection.Left,
+                    PolicePursuitRouteSearchFailure.None,
+                    95,
+                    95,
+                    0,
+                    null,
+                    null,
+                    PolicePursuitLaneChangeDiagnosticReason.RoutePreparation)
+                {
+                    Motivation = PolicePursuitLaneMotivation.TargetLaneAlignment
+                }
+            ]
         };
         context.State.Enqueue(ActiveResult(laneChange: alignment));
         context.State.Enqueue(ActiveResult(laneChange: alignment with
         {
             Revision = 2,
-            DistanceToDecisionMeters = 93
+            CandidateLaneRoutes =
+            [alignment.CandidateLaneRoutes.Single() with { RouteDistanceMeters = 93 }]
         }));
         context.State.Enqueue(ActiveResult(laneChange: alignment with
         {
             Revision = 3,
-            DistanceToDecisionMeters = 93,
             Motivation = PolicePursuitLaneMotivation.FutureJunction
         }));
 
@@ -459,7 +476,7 @@ public class PolicePursuitServiceTests
                 283881,
                 PoliceLaneChangeDirection.Left,
                 6,
-                94.6f)
+                null)
             {
                 Reason = PolicePursuitLaneChangeDiagnosticReason.Requested,
                 Motivation = PolicePursuitLaneMotivation.TargetLaneAlignment,
@@ -524,6 +541,56 @@ public class PolicePursuitServiceTests
         context.Service.UpdateOnce();
 
         Assert.That(LogCount("Lane change evaluation"), Is.EqualTo(2));
+    }
+
+    [Test]
+    public void PhysicalCapacityRejectionLogsSeparateTargetAndTransitionDistances()
+    {
+        var context = CreateContext();
+        var diagnostics = EvaluationDiagnostics(
+            1,
+            PolicePursuitLaneChangeDiagnosticReason.InsufficientPreparationDistance,
+            null,
+            0) with
+        {
+            DistanceToDecisionMeters = null,
+            Motivation = PolicePursuitLaneMotivation.TargetLaneAlignment,
+            PhysicalRelation = PolicePursuitLanePhysicalRelation.ImmediateLeft,
+            RequiredTransitionDistanceMeters = 60,
+            SourceAvailableDistanceMeters = 50,
+            DestinationAvailableDistanceMeters = 60,
+            CandidateLaneRoutes =
+            [
+                new PolicePursuitLaneRouteDiagnostic(
+                    175784,
+                    PoliceLaneChangeDirection.Left,
+                    PolicePursuitRouteSearchFailure.None,
+                    30,
+                    30,
+                    0,
+                    null,
+                    null,
+                    PolicePursuitLaneChangeDiagnosticReason.RoutePreparation)
+                {
+                    Motivation = PolicePursuitLaneMotivation.TargetLaneAlignment,
+                    PhysicalRelation = PolicePursuitLanePhysicalRelation.ImmediateLeft
+                }
+            ]
+        };
+        context.State.Enqueue(ActiveResult(laneChange: diagnostics));
+
+        context.Service.UpdateOnce();
+
+        var message = _sink.Events.Single(e =>
+            e.RenderMessage().Contains("Lane change evaluation")).RenderMessage();
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("TargetLaneAlignment"));
+            Assert.That(message, Does.Contain("routeToTarget 30"));
+            Assert.That(message, Does.Contain("requiredTransition 60"));
+            Assert.That(message, Does.Contain("sourceAvailable 50"));
+            Assert.That(message, Does.Contain("destinationAvailable 60"));
+        });
     }
 
     private static PolicePursuitLaneRouteDiagnostic LaneCandidate(
