@@ -360,6 +360,7 @@ public class AssettoServerPoliceAiStateTests
     [TestCase(CoreDrivingReason.ExcessClosingSpeed, PolicePursuitDrivingReason.ExcessClosingSpeed)]
     [TestCase(CoreDrivingReason.LaneChangeLimited, PolicePursuitDrivingReason.LaneChangeLimited)]
     [TestCase(CoreDrivingReason.CollisionRecovery, PolicePursuitDrivingReason.CollisionRecovery)]
+    [TestCase(CoreDrivingReason.InvalidMeasurement, PolicePursuitDrivingReason.InvalidMeasurement)]
     public void MapsEveryDrivingReason(
         CoreDrivingReason core,
         PolicePursuitDrivingReason expected)

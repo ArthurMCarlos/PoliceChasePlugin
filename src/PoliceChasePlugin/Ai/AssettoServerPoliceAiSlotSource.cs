@@ -235,6 +235,7 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             CoreDrivingReason.ExcessClosingSpeed => PolicePursuitDrivingReason.ExcessClosingSpeed,
             CoreDrivingReason.LaneChangeLimited => PolicePursuitDrivingReason.LaneChangeLimited,
             CoreDrivingReason.CollisionRecovery => PolicePursuitDrivingReason.CollisionRecovery,
+            CoreDrivingReason.InvalidMeasurement => PolicePursuitDrivingReason.InvalidMeasurement,
             _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null)
         };
 

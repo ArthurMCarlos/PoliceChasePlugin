@@ -40,7 +40,8 @@ public enum PolicePursuitDrivingReason
     ContactDisabled,
     ExcessClosingSpeed,
     LaneChangeLimited,
-    CollisionRecovery
+    CollisionRecovery,
+    InvalidMeasurement
 }
 
 public sealed record PolicePursuitDrivingOptions(
