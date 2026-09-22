@@ -44,12 +44,143 @@ public class PolicePursuitServiceTests
                 {
                     ((byte)10, new PolicePursuitTrackingOptions(
                         1500, 20_000, 50_000, 2000,
-                        new PolicePursuitLaneChangeOptions(true, 60, 3000, 1000)))
+                        new PolicePursuitLaneChangeOptions(true, 60, 3000, 1000),
+                        new PolicePursuitDrivingOptions(
+                            false, true, 100, 15, 3, 50, 35 / 3.6f, 5 / 3.6f)))
                 }));
             Assert.That(context.State.SpeedRequests.Single() * 3.6f,
                 Is.EqualTo(45).Within(0.01));
             Assert.That(_sink.Events.Any(e =>
                 e.RenderMessage().Contains("[PoliceChase] Pursuit started")), Is.True);
+        });
+    }
+
+    [Test]
+    public void AggressiveModePassesDrivingOptionsAndDoesNotApplyLegacySpeedPolicy()
+    {
+        var context = CreateContext(configure: configuration =>
+        {
+            configuration.PursuitAggressiveDrivingEnabled = true;
+            configuration.PursuitContactEnabled = false;
+            configuration.PursuitCatchUpDistanceMeters = 110;
+            configuration.PursuitCloseDistanceMeters = 16;
+            configuration.PursuitContactDistanceMeters = 4;
+            configuration.PursuitMaxSpeedKph = 144;
+            configuration.PursuitMaxClosingSpeedKph = 36;
+            configuration.PursuitContactClosingSpeedKph = 3.6f;
+        });
+        context.State.NextTrackingResult = ActiveResult(driving: DrivingDiagnostics(
+            revision: 1,
+            PolicePursuitDrivingState.CatchUp,
+            PolicePursuitDrivingReason.DistanceCatchUp));
+
+        context.Service.UpdateOnce();
+
+        var driving = context.State.TrackRequests.Single().Options.Driving;
+        Assert.Multiple(() =>
+        {
+            Assert.That(driving, Is.EqualTo(new PolicePursuitDrivingOptions(
+                true, false, 110, 16, 4, 40, 10, 1)));
+            Assert.That(context.State.SpeedRequests, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void DisabledAggressiveModeUsesLegacySpeedPolicy()
+    {
+        var context = CreateContext();
+        context.State.NextTrackingResult = ActiveResult();
+
+        context.Service.UpdateOnce();
+
+        Assert.That(context.State.SpeedRequests.Single() * 3.6f,
+            Is.EqualTo(45).Within(0.01));
+    }
+
+    [Test]
+    public void AggressiveModeKeepsTemporaryRouteLossWithoutLegacySpeedWrite()
+    {
+        var context = CreateContext(configure: configuration =>
+            configuration.PursuitAggressiveDrivingEnabled = true);
+        context.State.Enqueue(ActiveResult(driving: DrivingDiagnostics(
+            1,
+            PolicePursuitDrivingState.Approach,
+            PolicePursuitDrivingReason.DistanceApproach)));
+        context.State.Enqueue(new PolicePursuitTrackingResult(
+            PolicePursuitTrackingStatus.RouteTemporarilyUnavailable,
+            null,
+            30));
+
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(context.State.SpeedRequests, Is.Empty);
+            Assert.That(context.State.ReleaseCount, Is.Zero);
+        });
+    }
+
+    [Test]
+    public void DrivingLogsDeduplicateContinuousMeasurementsWithinRevision()
+    {
+        var context = CreateContext(configure: configuration =>
+            configuration.PursuitAggressiveDrivingEnabled = true);
+        context.State.Enqueue(ActiveResult(driving: DrivingDiagnostics(
+            1,
+            PolicePursuitDrivingState.CatchUp,
+            PolicePursuitDrivingReason.DistanceCatchUp)));
+        context.State.Enqueue(ActiveResult(driving: DrivingDiagnostics(
+            1,
+            PolicePursuitDrivingState.CatchUp,
+            PolicePursuitDrivingReason.DistanceCatchUp,
+            routeDistance: 140,
+            clearance: 130)));
+
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+
+        Assert.That(LogCount("Pursuit driving state"), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void DrivingLogsEverySemanticStateTransitionWithMeasurements()
+    {
+        var context = CreateContext(configure: configuration =>
+            configuration.PursuitAggressiveDrivingEnabled = true);
+        var transitions = new[]
+        {
+            (PolicePursuitDrivingState.CatchUp, PolicePursuitDrivingReason.DistanceCatchUp),
+            (PolicePursuitDrivingState.Approach, PolicePursuitDrivingReason.DistanceApproach),
+            (PolicePursuitDrivingState.ClosePressure, PolicePursuitDrivingReason.ClosePressure),
+            (PolicePursuitDrivingState.Contact, PolicePursuitDrivingReason.ContactPressure),
+            (PolicePursuitDrivingState.Recovery, PolicePursuitDrivingReason.CollisionRecovery)
+        };
+        for (var i = 0; i < transitions.Length; i++)
+        {
+            context.State.Enqueue(ActiveResult(driving: DrivingDiagnostics(
+                i + 1,
+                transitions[i].Item1,
+                transitions[i].Item2,
+                collisionReported: transitions[i].Item1 == PolicePursuitDrivingState.Recovery)));
+        }
+
+        for (var i = 0; i < transitions.Length; i++)
+            context.Service.UpdateOnce();
+
+        var logs = _sink.Events
+            .Select(logEvent => logEvent.RenderMessage())
+            .Where(message => message.Contains("Pursuit driving state"))
+            .ToArray();
+        Assert.Multiple(() =>
+        {
+            Assert.That(logs, Has.Length.EqualTo(5));
+            Assert.That(logs[0], Does.Contain("routeDistance 150.0m"));
+            Assert.That(logs[0], Does.Contain("playerSpeed 72.0km/h"));
+            Assert.That(logs[0], Does.Contain("policeSpeed 90.0km/h"));
+            Assert.That(logs[0], Does.Contain("closingSpeed 18.0km/h"));
+            Assert.That(logs[0], Does.Contain("targetSpeed 108.0km/h"));
+            Assert.That(logs[^1], Does.Contain("CollisionRecovery"));
         });
     }
 
@@ -627,8 +758,13 @@ public class PolicePursuitServiceTests
             JunctionId = junctionId
         };
 
-    private static PolicePursuitTrackingResult ActiveResult() =>
-        new(PolicePursuitTrackingStatus.Active, 150, 20 / 3.6f);
+    private static PolicePursuitTrackingResult ActiveResult(
+        PolicePursuitDrivingDiagnostics? driving = null) =>
+        new(
+            PolicePursuitTrackingStatus.Active,
+            150,
+            20 / 3.6f,
+            DrivingDiagnostics: driving);
 
     private static PolicePursuitTrackingResult ActiveResult(
         PolicePursuitLaneChangeDiagnostics laneChange) =>
@@ -655,13 +791,36 @@ public class PolicePursuitServiceTests
                 12,
                 decisions ?? []));
 
-    private static TestContext CreateContext(bool policeInitialized = true)
+    private static PolicePursuitDrivingDiagnostics DrivingDiagnostics(
+        long revision,
+        PolicePursuitDrivingState state,
+        PolicePursuitDrivingReason reason,
+        float routeDistance = 150,
+        float clearance = 140,
+        bool collisionReported = false) =>
+        new(
+            revision,
+            state,
+            reason,
+            routeDistance,
+            clearance,
+            TargetSpeedMetersPerSecond: 20,
+            PoliceSpeedMetersPerSecond: 25,
+            ClosingSpeedMetersPerSecond: 5,
+            DesiredClosingSpeedMetersPerSecond: 10,
+            RequestedSpeedMetersPerSecond: 30,
+            collisionReported);
+
+    private static TestContext CreateContext(
+        bool policeInitialized = true,
+        Action<PoliceChaseConfiguration>? configure = null)
     {
         var configuration = new PoliceChaseConfiguration
         {
             PoliceCarSessionId = 12,
             PoliceCarModel = "police"
         };
+        configure?.Invoke(configuration);
         var state = new FakePoliceAiState(policeInitialized);
         var aiSource = new FakePoliceAiSlotSource();
         aiSource.AddFixedSlot(12, "police");

@@ -17,6 +17,10 @@ using CoreLaneRouteDiagnostic = AssettoServer.Server.Ai.Routing.AiPursuitLaneRou
 using CoreLaneEvaluationReason = AssettoServer.Server.Ai.Routing.AiPursuitLaneEvaluationReason;
 using CoreLaneMotivation = AssettoServer.Server.Ai.Routing.AiPursuitLaneMotivation;
 using CoreLanePhysicalRelation = AssettoServer.Server.Ai.Routing.AiPursuitLanePhysicalRelation;
+using CoreDrivingOptions = AssettoServer.Server.Ai.AiPursuitDrivingOptions;
+using CoreDrivingDiagnostics = AssettoServer.Server.Ai.AiPursuitDrivingDiagnostics;
+using CoreDrivingState = AssettoServer.Server.Ai.AiPursuitDrivingState;
+using CoreDrivingReason = AssettoServer.Server.Ai.AiPursuitDrivingReason;
 
 namespace PoliceChasePlugin.Ai;
 
@@ -69,7 +73,10 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
                     options.LaneChange.Enabled,
                     options.LaneChange.DistanceMeters,
                     options.LaneChange.CooldownMilliseconds,
-                    options.LaneChange.LookaheadMeters)));
+                    options.LaneChange.LookaheadMeters),
+            options.Driving == null
+                ? null
+                : MapDrivingOptions(options.Driving)));
         return new PolicePursuitTrackingResult(
             MapStatus(result.Status),
             result.RouteDistanceMeters,
@@ -82,7 +89,10 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
                 : MapSearchDiagnostics(result.SearchDiagnostics),
             result.LaneChangeDiagnostics == null
                 ? null
-                : MapLaneChangeDiagnostics(result.LaneChangeDiagnostics));
+                : MapLaneChangeDiagnostics(result.LaneChangeDiagnostics),
+            result.DrivingDiagnostics == null
+                ? null
+                : MapDrivingDiagnostics(result.DrivingDiagnostics));
     }
 
     public void SetDesiredSpeed(float metersPerSecond) =>
@@ -172,6 +182,60 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             RequiredTransitionDistanceMeters = diagnostics.RequiredTransitionDistanceMeters,
             SourceAvailableDistanceMeters = diagnostics.SourceAvailableDistanceMeters,
             DestinationAvailableDistanceMeters = diagnostics.DestinationAvailableDistanceMeters
+        };
+
+    internal static CoreDrivingOptions MapDrivingOptions(
+        PolicePursuitDrivingOptions options) =>
+        new(
+            options.Enabled,
+            options.ContactEnabled,
+            options.CatchUpDistanceMeters,
+            options.CloseDistanceMeters,
+            options.ContactDistanceMeters,
+            options.MaximumSpeedMetersPerSecond,
+            options.MaximumClosingSpeedMetersPerSecond,
+            options.ContactClosingSpeedMetersPerSecond);
+
+    internal static PolicePursuitDrivingDiagnostics MapDrivingDiagnostics(
+        CoreDrivingDiagnostics diagnostics) =>
+        new(
+            diagnostics.Revision,
+            MapDrivingState(diagnostics.State),
+            MapDrivingReason(diagnostics.Reason),
+            diagnostics.RouteDistanceMeters,
+            diagnostics.PhysicalClearanceMeters,
+            diagnostics.TargetSpeedMetersPerSecond,
+            diagnostics.PoliceSpeedMetersPerSecond,
+            diagnostics.ClosingSpeedMetersPerSecond,
+            diagnostics.DesiredClosingSpeedMetersPerSecond,
+            diagnostics.RequestedSpeedMetersPerSecond,
+            diagnostics.CollisionReported);
+
+    internal static PolicePursuitDrivingState MapDrivingState(
+        CoreDrivingState state) =>
+        state switch
+        {
+            CoreDrivingState.CatchUp => PolicePursuitDrivingState.CatchUp,
+            CoreDrivingState.Approach => PolicePursuitDrivingState.Approach,
+            CoreDrivingState.ClosePressure => PolicePursuitDrivingState.ClosePressure,
+            CoreDrivingState.Contact => PolicePursuitDrivingState.Contact,
+            CoreDrivingState.Recovery => PolicePursuitDrivingState.Recovery,
+            _ => throw new ArgumentOutOfRangeException(nameof(state), state, null)
+        };
+
+    internal static PolicePursuitDrivingReason MapDrivingReason(
+        CoreDrivingReason reason) =>
+        reason switch
+        {
+            CoreDrivingReason.DistanceCatchUp => PolicePursuitDrivingReason.DistanceCatchUp,
+            CoreDrivingReason.DistanceApproach => PolicePursuitDrivingReason.DistanceApproach,
+            CoreDrivingReason.ClosePressure => PolicePursuitDrivingReason.ClosePressure,
+            CoreDrivingReason.ContactPressure => PolicePursuitDrivingReason.ContactPressure,
+            CoreDrivingReason.ContactDisabled => PolicePursuitDrivingReason.ContactDisabled,
+            CoreDrivingReason.ExcessClosingSpeed => PolicePursuitDrivingReason.ExcessClosingSpeed,
+            CoreDrivingReason.LaneChangeLimited => PolicePursuitDrivingReason.LaneChangeLimited,
+            CoreDrivingReason.CollisionRecovery => PolicePursuitDrivingReason.CollisionRecovery,
+            _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null)
         };
 
     private static PolicePursuitLaneRouteDiagnostic MapLaneRouteDiagnostic(

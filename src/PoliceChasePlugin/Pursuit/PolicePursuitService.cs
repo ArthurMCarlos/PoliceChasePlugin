@@ -24,6 +24,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
     private long? _lastLoggedRouteRevision;
     private long? _lastLoggedLaneChangeRevision;
     private LaneChangeLogSignature? _lastLaneChangeEvaluationSignature;
+    private DrivingLogSignature? _lastDrivingLogSignature;
     private readonly Dictionary<int, bool> _loggedJunctionDecisions = new();
     private bool _routeTemporarilyLost;
 
@@ -46,7 +47,16 @@ public sealed class PolicePursuitService : IPolicePursuitService
                 configuration.PursuitLaneChangeEnabled,
                 configuration.PursuitLaneChangeDistanceMeters,
                 configuration.PursuitLaneChangeCooldownMilliseconds,
-                configuration.PursuitLaneChangeLookaheadMeters));
+                configuration.PursuitLaneChangeLookaheadMeters),
+            new PolicePursuitDrivingOptions(
+                configuration.PursuitAggressiveDrivingEnabled,
+                configuration.PursuitContactEnabled,
+                configuration.PursuitCatchUpDistanceMeters,
+                configuration.PursuitCloseDistanceMeters,
+                configuration.PursuitContactDistanceMeters,
+                configuration.PursuitMaxSpeedKph / 3.6f,
+                configuration.PursuitMaxClosingSpeedKph / 3.6f,
+                configuration.PursuitContactClosingSpeedKph / 3.6f));
     }
 
     public void UpdateOnce()
@@ -190,12 +200,16 @@ public sealed class PolicePursuitService : IPolicePursuitService
             result.SearchDiagnostics,
             starting);
         LogLaneChangeTransition(targetSessionId, result.LaneChangeDiagnostics);
-        var desiredSpeed = PolicePursuitSpeedPolicy.Calculate(
-            result.TargetSpeedMetersPerSecond,
-            result.RouteDistanceMeters.Value,
-            _configuration.PursuitDesiredDistanceMeters,
-            _configuration.PursuitMaxSpeedKph);
-        state.SetDesiredSpeed(desiredSpeed);
+        LogDrivingTransition(targetSessionId, result.DrivingDiagnostics);
+        if (!_configuration.PursuitAggressiveDrivingEnabled)
+        {
+            var desiredSpeed = PolicePursuitSpeedPolicy.Calculate(
+                result.TargetSpeedMetersPerSecond,
+                result.RouteDistanceMeters.Value,
+                _configuration.PursuitDesiredDistanceMeters,
+                _configuration.PursuitMaxSpeedKph);
+            state.SetDesiredSpeed(desiredSpeed);
+        }
     }
 
     private void HandleTemporaryRouteLoss(
@@ -255,7 +269,40 @@ public sealed class PolicePursuitService : IPolicePursuitService
         _lastLoggedRouteRevision = null;
         _lastLoggedLaneChangeRevision = null;
         _lastLaneChangeEvaluationSignature = null;
+        _lastDrivingLogSignature = null;
         _loggedJunctionDecisions.Clear();
+    }
+
+    private void LogDrivingTransition(
+        byte targetSessionId,
+        PolicePursuitDrivingDiagnostics? diagnostics)
+    {
+        if (diagnostics == null)
+            return;
+
+        var signature = new DrivingLogSignature(
+            diagnostics.Revision,
+            diagnostics.State,
+            diagnostics.Reason,
+            diagnostics.CollisionReported);
+        if (_lastDrivingLogSignature == signature)
+            return;
+        _lastDrivingLogSignature = signature;
+
+        Log.Information(
+            "[PoliceChase] Pursuit driving state: {State}; target {TargetSessionId}; " +
+            "routeDistance {RouteDistance:F1}m; clearance {Clearance:F1}m; " +
+            "playerSpeed {PlayerSpeed:F1}km/h; policeSpeed {PoliceSpeed:F1}km/h; " +
+            "closingSpeed {ClosingSpeed:F1}km/h; targetSpeed {RequestedSpeed:F1}km/h; reason {Reason}",
+            diagnostics.State,
+            targetSessionId,
+            diagnostics.RouteDistanceMeters,
+            diagnostics.PhysicalClearanceMeters,
+            diagnostics.TargetSpeedMetersPerSecond * 3.6f,
+            diagnostics.PoliceSpeedMetersPerSecond * 3.6f,
+            diagnostics.ClosingSpeedMetersPerSecond * 3.6f,
+            diagnostics.RequestedSpeedMetersPerSecond * 3.6f,
+            diagnostics.Reason);
     }
 
     private void LogLaneChangeTransition(
@@ -402,6 +449,12 @@ public sealed class PolicePursuitService : IPolicePursuitService
         PolicePursuitLanePhysicalRelation? PhysicalRelation,
         PolicePursuitLaneChangeSafetyStatus? SafetyStatus,
         string CandidateEvidence);
+
+    private sealed record DrivingLogSignature(
+        long Revision,
+        PolicePursuitDrivingState State,
+        PolicePursuitDrivingReason Reason,
+        bool CollisionReported);
 
     private static string CreateLaneCandidateEvidence(
         PolicePursuitLaneChangeDiagnostics diagnostics) =>

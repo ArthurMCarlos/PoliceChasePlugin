@@ -15,6 +15,10 @@ using CoreLaneRouteDiagnostic = AssettoServer.Server.Ai.Routing.AiPursuitLaneRou
 using CoreLaneEvaluationReason = AssettoServer.Server.Ai.Routing.AiPursuitLaneEvaluationReason;
 using CoreLaneMotivation = AssettoServer.Server.Ai.Routing.AiPursuitLaneMotivation;
 using CoreLanePhysicalRelation = AssettoServer.Server.Ai.Routing.AiPursuitLanePhysicalRelation;
+using CoreDrivingOptions = AssettoServer.Server.Ai.AiPursuitDrivingOptions;
+using CoreDrivingDiagnostics = AssettoServer.Server.Ai.AiPursuitDrivingDiagnostics;
+using CoreDrivingState = AssettoServer.Server.Ai.AiPursuitDrivingState;
+using CoreDrivingReason = AssettoServer.Server.Ai.AiPursuitDrivingReason;
 using PoliceChasePlugin.Ai;
 
 namespace PoliceChasePlugin.Tests.Ai;
@@ -284,6 +288,84 @@ public class AssettoServerPoliceAiStateTests
                 50));
 
         Assert.That(mapped.Direction, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void MapsDrivingOptionsWithoutChangingUnitsOrThresholds()
+    {
+        var mapped = AssettoServerNativePolicePursuitState.MapDrivingOptions(
+            new PolicePursuitDrivingOptions(
+                Enabled: true,
+                ContactEnabled: false,
+                CatchUpDistanceMeters: 101,
+                CloseDistanceMeters: 16,
+                ContactDistanceMeters: 4,
+                MaximumSpeedMetersPerSecond: 41,
+                MaximumClosingSpeedMetersPerSecond: 9,
+                ContactClosingSpeedMetersPerSecond: 2));
+
+        Assert.That(mapped, Is.EqualTo(new CoreDrivingOptions(
+            true, false, 101, 16, 4, 41, 9, 2)));
+    }
+
+    [Test]
+    public void MapsDrivingDiagnosticsWithoutLosingMeasurements()
+    {
+        var mapped = AssettoServerNativePolicePursuitState.MapDrivingDiagnostics(
+            new CoreDrivingDiagnostics(
+                Revision: 9,
+                State: CoreDrivingState.Recovery,
+                Reason: CoreDrivingReason.CollisionRecovery,
+                RouteDistanceMeters: 12,
+                PhysicalClearanceMeters: 2,
+                TargetSpeedMetersPerSecond: 20,
+                PoliceSpeedMetersPerSecond: 22,
+                ClosingSpeedMetersPerSecond: 2,
+                DesiredClosingSpeedMetersPerSecond: 1,
+                RequestedSpeedMetersPerSecond: 21,
+                CollisionReported: true));
+
+        Assert.That(mapped, Is.EqualTo(new PolicePursuitDrivingDiagnostics(
+            9,
+            PolicePursuitDrivingState.Recovery,
+            PolicePursuitDrivingReason.CollisionRecovery,
+            12,
+            2,
+            20,
+            22,
+            2,
+            1,
+            21,
+            true)));
+    }
+
+    [TestCase(CoreDrivingState.CatchUp, PolicePursuitDrivingState.CatchUp)]
+    [TestCase(CoreDrivingState.Approach, PolicePursuitDrivingState.Approach)]
+    [TestCase(CoreDrivingState.ClosePressure, PolicePursuitDrivingState.ClosePressure)]
+    [TestCase(CoreDrivingState.Contact, PolicePursuitDrivingState.Contact)]
+    [TestCase(CoreDrivingState.Recovery, PolicePursuitDrivingState.Recovery)]
+    public void MapsEveryDrivingState(
+        CoreDrivingState core,
+        PolicePursuitDrivingState expected)
+    {
+        Assert.That(AssettoServerNativePolicePursuitState.MapDrivingState(core),
+            Is.EqualTo(expected));
+    }
+
+    [TestCase(CoreDrivingReason.DistanceCatchUp, PolicePursuitDrivingReason.DistanceCatchUp)]
+    [TestCase(CoreDrivingReason.DistanceApproach, PolicePursuitDrivingReason.DistanceApproach)]
+    [TestCase(CoreDrivingReason.ClosePressure, PolicePursuitDrivingReason.ClosePressure)]
+    [TestCase(CoreDrivingReason.ContactPressure, PolicePursuitDrivingReason.ContactPressure)]
+    [TestCase(CoreDrivingReason.ContactDisabled, PolicePursuitDrivingReason.ContactDisabled)]
+    [TestCase(CoreDrivingReason.ExcessClosingSpeed, PolicePursuitDrivingReason.ExcessClosingSpeed)]
+    [TestCase(CoreDrivingReason.LaneChangeLimited, PolicePursuitDrivingReason.LaneChangeLimited)]
+    [TestCase(CoreDrivingReason.CollisionRecovery, PolicePursuitDrivingReason.CollisionRecovery)]
+    public void MapsEveryDrivingReason(
+        CoreDrivingReason core,
+        PolicePursuitDrivingReason expected)
+    {
+        Assert.That(AssettoServerNativePolicePursuitState.MapDrivingReason(core),
+            Is.EqualTo(expected));
     }
 
     private sealed class FakeNativePolicePursuitState : INativePolicePursuitState
