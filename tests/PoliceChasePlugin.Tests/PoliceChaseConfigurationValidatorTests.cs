@@ -200,6 +200,49 @@ public class PoliceChaseConfigurationValidatorTests
             .EqualTo(nameof(PoliceChaseConfiguration.PursuitLaneChangeLookaheadMeters)));
     }
 
+    [TestCase(15, 15, 3, nameof(PoliceChaseConfiguration.PursuitCatchUpDistanceMeters))]
+    [TestCase(100, 3, 3, nameof(PoliceChaseConfiguration.PursuitCloseDistanceMeters))]
+    [TestCase(100, 15, 0, nameof(PoliceChaseConfiguration.PursuitContactDistanceMeters))]
+    [TestCase(float.NaN, 15, 3, nameof(PoliceChaseConfiguration.PursuitCatchUpDistanceMeters))]
+    [TestCase(100, float.PositiveInfinity, 3, nameof(PoliceChaseConfiguration.PursuitCloseDistanceMeters))]
+    [TestCase(100, 15, float.NaN, nameof(PoliceChaseConfiguration.PursuitContactDistanceMeters))]
+    public void DrivingDistancesMustBeFinitePositiveAndStrictlyDescending(
+        float catchUp,
+        float close,
+        float contact,
+        string expectedProperty)
+    {
+        var result = _validator.Validate(new PoliceChaseConfiguration
+        {
+            PursuitCatchUpDistanceMeters = catchUp,
+            PursuitCloseDistanceMeters = close,
+            PursuitContactDistanceMeters = contact
+        });
+
+        Assert.That(result.Errors.Select(error => error.PropertyName),
+            Does.Contain(expectedProperty));
+    }
+
+    [TestCase(-1, 5, nameof(PoliceChaseConfiguration.PursuitMaxClosingSpeedKph))]
+    [TestCase(35, -1, nameof(PoliceChaseConfiguration.PursuitContactClosingSpeedKph))]
+    [TestCase(35, 36, nameof(PoliceChaseConfiguration.PursuitContactClosingSpeedKph))]
+    [TestCase(float.NaN, 5, nameof(PoliceChaseConfiguration.PursuitMaxClosingSpeedKph))]
+    [TestCase(35, float.PositiveInfinity, nameof(PoliceChaseConfiguration.PursuitContactClosingSpeedKph))]
+    public void DrivingClosingSpeedsMustBeFiniteNonNegativeAndOrdered(
+        float maximum,
+        float contact,
+        string expectedProperty)
+    {
+        var result = _validator.Validate(new PoliceChaseConfiguration
+        {
+            PursuitMaxClosingSpeedKph = maximum,
+            PursuitContactClosingSpeedKph = contact
+        });
+
+        Assert.That(result.Errors.Select(error => error.PropertyName),
+            Does.Contain(expectedProperty));
+    }
+
     [TestCase(-1)]
     [TestCase(255)]
     public void RejectsInvalidPoliceSessionIdWhenEnabled(int sessionId)

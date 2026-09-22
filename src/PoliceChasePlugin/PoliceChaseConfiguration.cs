@@ -21,4 +21,11 @@ public class PoliceChaseConfiguration : IValidateConfiguration<PoliceChaseConfig
     public float PursuitLaneChangeDistanceMeters { get; set; } = 60;
     public int PursuitLaneChangeCooldownMilliseconds { get; set; } = 3_000;
     public float PursuitLaneChangeLookaheadMeters { get; set; } = 1_000;
+    public bool PursuitAggressiveDrivingEnabled { get; set; }
+    public bool PursuitContactEnabled { get; set; } = true;
+    public float PursuitCatchUpDistanceMeters { get; set; } = 100;
+    public float PursuitCloseDistanceMeters { get; set; } = 15;
+    public float PursuitContactDistanceMeters { get; set; } = 3;
+    public float PursuitMaxClosingSpeedKph { get; set; } = 35;
+    public float PursuitContactClosingSpeedKph { get; set; } = 5;
 }

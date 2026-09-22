@@ -19,7 +19,52 @@ public sealed record PolicePursuitTrackingOptions(
     float MaximumRouteDistanceMeters,
     int MaximumVisitedNodes,
     int RouteGraceMilliseconds,
-    PolicePursuitLaneChangeOptions? LaneChange = null);
+    PolicePursuitLaneChangeOptions? LaneChange = null,
+    PolicePursuitDrivingOptions? Driving = null);
+
+public enum PolicePursuitDrivingState
+{
+    CatchUp,
+    Approach,
+    ClosePressure,
+    Contact,
+    Recovery
+}
+
+public enum PolicePursuitDrivingReason
+{
+    DistanceCatchUp,
+    DistanceApproach,
+    ClosePressure,
+    ContactPressure,
+    ContactDisabled,
+    ExcessClosingSpeed,
+    LaneChangeLimited,
+    CollisionRecovery
+}
+
+public sealed record PolicePursuitDrivingOptions(
+    bool Enabled,
+    bool ContactEnabled,
+    float CatchUpDistanceMeters,
+    float CloseDistanceMeters,
+    float ContactDistanceMeters,
+    float MaximumSpeedMetersPerSecond,
+    float MaximumClosingSpeedMetersPerSecond,
+    float ContactClosingSpeedMetersPerSecond);
+
+public sealed record PolicePursuitDrivingDiagnostics(
+    long Revision,
+    PolicePursuitDrivingState State,
+    PolicePursuitDrivingReason Reason,
+    float RouteDistanceMeters,
+    float PhysicalClearanceMeters,
+    float TargetSpeedMetersPerSecond,
+    float PoliceSpeedMetersPerSecond,
+    float ClosingSpeedMetersPerSecond,
+    float DesiredClosingSpeedMetersPerSecond,
+    float RequestedSpeedMetersPerSecond,
+    bool CollisionReported);
 
 public sealed record PolicePursuitLaneChangeOptions(
     bool Enabled,
@@ -194,7 +239,8 @@ public sealed record PolicePursuitTrackingResult(
     float TargetSpeedMetersPerSecond,
     PolicePursuitRouteDiagnostics? RouteDiagnostics = null,
     PolicePursuitSearchDiagnostics? SearchDiagnostics = null,
-    PolicePursuitLaneChangeDiagnostics? LaneChangeDiagnostics = null);
+    PolicePursuitLaneChangeDiagnostics? LaneChangeDiagnostics = null,
+    PolicePursuitDrivingDiagnostics? DrivingDiagnostics = null);
 
 public interface IPoliceAiState
 {

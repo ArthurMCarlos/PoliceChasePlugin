@@ -4,7 +4,7 @@ namespace PoliceChasePlugin.Tests;
 public class PoliceChaseConfigurationTests
 {
     [Test]
-    public void NewConfigurationUsesP06Defaults()
+    public void NewConfigurationUsesP08Defaults()
     {
         var configuration = new PoliceChaseConfiguration();
 
@@ -25,6 +25,13 @@ public class PoliceChaseConfigurationTests
             Assert.That(configuration.PursuitLaneChangeDistanceMeters, Is.EqualTo(60));
             Assert.That(configuration.PursuitLaneChangeCooldownMilliseconds, Is.EqualTo(3_000));
             Assert.That(configuration.PursuitLaneChangeLookaheadMeters, Is.EqualTo(1_000));
+            Assert.That(configuration.PursuitAggressiveDrivingEnabled, Is.False);
+            Assert.That(configuration.PursuitContactEnabled, Is.True);
+            Assert.That(configuration.PursuitCatchUpDistanceMeters, Is.EqualTo(100));
+            Assert.That(configuration.PursuitCloseDistanceMeters, Is.EqualTo(15));
+            Assert.That(configuration.PursuitContactDistanceMeters, Is.EqualTo(3));
+            Assert.That(configuration.PursuitMaxClosingSpeedKph, Is.EqualTo(35));
+            Assert.That(configuration.PursuitContactClosingSpeedKph, Is.EqualTo(5));
         });
     }
 }
