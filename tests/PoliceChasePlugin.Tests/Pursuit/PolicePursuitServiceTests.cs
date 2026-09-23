@@ -139,6 +139,73 @@ public class PolicePursuitServiceTests
     }
 
     [Test]
+    public void PitRejectionLogsOnReasonChangeOrAfterFiveSecondsOnly()
+    {
+        var context = CreateContext(configure: configuration =>
+        {
+            configuration.PursuitAggressiveDrivingEnabled = true;
+            configuration.PursuitPitEnabled = true;
+        });
+        var blocked = new PolicePursuitPitEligibilityDiagnostics(
+            PolicePursuitPitPhase.Idle, PolicePursuitPitAbortReason.GeometryInvalid,
+            true, true, true, false, 4, 1, 4, 0, .9f,
+            false, true, true, 5, 3.6f, PolicePursuitDrivingState.ClosePressure,
+            PolicePursuitDrivingReason.ClosePressure);
+        context.State.Enqueue(ActiveResult() with { PitEligibilityDiagnostics = blocked });
+        context.State.Enqueue(ActiveResult() with { PitEligibilityDiagnostics = blocked });
+        context.State.Enqueue(ActiveResult() with { PitEligibilityDiagnostics = blocked with
+            { RejectionReason = PolicePursuitPitAbortReason.BlockedSide } });
+        context.State.Enqueue(ActiveResult() with { PitEligibilityDiagnostics = blocked with
+            { Phase = PolicePursuitPitPhase.Armed, RejectionReason = null } });
+        context.State.Enqueue(ActiveResult() with { PitEligibilityDiagnostics = blocked with
+            { RejectionReason = PolicePursuitPitAbortReason.BlockedSide } });
+
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+        Assert.That(LogCount("PIT eligibility rejected"), Is.EqualTo(2),
+            "The same rejection must stay quiet across an Armed tick");
+        context.State.Enqueue(ActiveResult() with { PitEligibilityDiagnostics = blocked with
+            { RejectionReason = PolicePursuitPitAbortReason.BlockedSide } });
+        context.Clock.AdvanceMilliseconds(5000);
+        context.Service.UpdateOnce();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(LogCount("PIT eligibility rejected"), Is.EqualTo(3));
+            Assert.That(_sink.Events.Any(e => e.RenderMessage().Contains(
+                "reason GeometryInvalid; navigationActive True; laneFits True")), Is.True);
+            Assert.That(_sink.Events.Any(e => e.RenderMessage().Contains(
+                "ahead 4.0m; lateral 0.0m; headingDot 0.90")), Is.True);
+        });
+    }
+
+    [Test]
+    public void PitRejectionIsVisibleEvenWhenPoliceIsFarAway()
+    {
+        var context = CreateContext(configure: configuration =>
+        {
+            configuration.PursuitAggressiveDrivingEnabled = true;
+            configuration.PursuitPitEnabled = true;
+        });
+        context.State.Enqueue(ActiveResult() with
+        {
+            PitEligibilityDiagnostics = new PolicePursuitPitEligibilityDiagnostics(
+                PolicePursuitPitPhase.Idle, PolicePursuitPitAbortReason.OutOfRange,
+                true, true, true, true, 4, 0, 150, 0, 1,
+                false, true, true, 150, 3,
+                PolicePursuitDrivingState.CatchUp,
+                PolicePursuitDrivingReason.DistanceCatchUp)
+        });
+
+        context.Service.UpdateOnce();
+
+        Assert.That(LogCount("PIT eligibility rejected"), Is.EqualTo(1));
+    }
+
+    [Test]
     public void AggressiveModeKeepsTemporaryRouteLossWithoutLegacySpeedWrite()
     {
         var context = CreateContext(configure: configuration =>

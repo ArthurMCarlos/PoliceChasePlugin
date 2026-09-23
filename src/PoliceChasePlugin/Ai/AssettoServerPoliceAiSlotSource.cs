@@ -95,7 +95,10 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
                 : MapDrivingDiagnostics(result.DrivingDiagnostics),
             result.PitDiagnostics == null
                 ? null
-                : MapPitDiagnostics(result.PitDiagnostics));
+                : MapPitDiagnostics(result.PitDiagnostics),
+            result.PitEligibilityDiagnostics == null
+                ? null
+                : MapPitEligibilityDiagnostics(result.PitEligibilityDiagnostics));
     }
 
     public void SetDesiredSpeed(float metersPerSecond) =>
@@ -227,7 +230,14 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
                 null => null,
                 _ => throw new ArgumentOutOfRangeException(nameof(diagnostics))
             },
-            diagnostics.Reason switch
+            MapPitAbortReason(diagnostics.Reason),
+            diagnostics.PhysicalClearanceMeters,
+            diagnostics.ClosingSpeedMetersPerSecond,
+            diagnostics.OffsetMeters);
+
+    private static PolicePursuitPitAbortReason MapPitAbortReason(
+        AiPursuitPitAbortReason reason) =>
+        reason switch
             {
                 AiPursuitPitAbortReason.None => PolicePursuitPitAbortReason.None,
                 AiPursuitPitAbortReason.Disabled => PolicePursuitPitAbortReason.Disabled,
@@ -241,11 +251,43 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
                 AiPursuitPitAbortReason.Recovery => PolicePursuitPitAbortReason.Recovery,
                 AiPursuitPitAbortReason.GeometryInvalid => PolicePursuitPitAbortReason.GeometryInvalid,
                 AiPursuitPitAbortReason.CommitElapsed => PolicePursuitPitAbortReason.CommitElapsed,
+                _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null)
+            };
+
+    internal static PolicePursuitPitEligibilityDiagnostics MapPitEligibilityDiagnostics(
+        AiPursuitPitEligibilityDiagnostics diagnostics) =>
+        new(
+            diagnostics.Phase switch
+            {
+                AiPursuitPitPhase.Idle => PolicePursuitPitPhase.Idle,
+                AiPursuitPitPhase.Armed => PolicePursuitPitPhase.Armed,
+                AiPursuitPitPhase.Attempting => PolicePursuitPitPhase.Attempting,
+                AiPursuitPitPhase.Cooldown => PolicePursuitPitPhase.Cooldown,
                 _ => throw new ArgumentOutOfRangeException(nameof(diagnostics))
             },
+            diagnostics.RejectionReason.HasValue
+                ? MapPitAbortReason(diagnostics.RejectionReason.Value)
+                : null,
+            diagnostics.NavigationActive,
+            diagnostics.LaneFitsOffset,
+            diagnostics.OffsetReady,
+            diagnostics.TargetAligned,
+            diagnostics.LaneWidthMeters,
+            diagnostics.CurrentOffsetMeters,
+            diagnostics.TargetLongitudinalMeters,
+            diagnostics.TargetLateralMeters,
+            diagnostics.HeadingDot,
+            diagnostics.JunctionNear,
+            diagnostics.LeftSafe,
+            diagnostics.RightSafe,
             diagnostics.PhysicalClearanceMeters,
             diagnostics.ClosingSpeedMetersPerSecond,
-            diagnostics.OffsetMeters);
+            MapDrivingState(diagnostics.DrivingState),
+            MapDrivingReason(diagnostics.DrivingReason))
+        {
+            RouteRevision = diagnostics.RouteRevision,
+            LaneChangePhase = diagnostics.LaneChangePhase.ToString()
+        };
 
     internal static PolicePursuitDrivingDiagnostics MapDrivingDiagnostics(
         CoreDrivingDiagnostics diagnostics) =>

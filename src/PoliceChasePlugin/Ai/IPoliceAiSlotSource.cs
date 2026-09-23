@@ -81,6 +81,31 @@ public sealed record PolicePursuitPitDiagnostics(
     float ClosingSpeedMetersPerSecond,
     float OffsetMeters);
 
+// Temporary, observational diagnostics for PIT eligibility during server tests.
+public sealed record PolicePursuitPitEligibilityDiagnostics(
+    PolicePursuitPitPhase Phase,
+    PolicePursuitPitAbortReason? RejectionReason,
+    bool NavigationActive,
+    bool LaneFitsOffset,
+    bool OffsetReady,
+    bool TargetAligned,
+    float LaneWidthMeters,
+    float CurrentOffsetMeters,
+    float TargetLongitudinalMeters,
+    float TargetLateralMeters,
+    float HeadingDot,
+    bool JunctionNear,
+    bool LeftSafe,
+    bool RightSafe,
+    float PhysicalClearanceMeters,
+    float ClosingSpeedMetersPerSecond,
+    PolicePursuitDrivingState DrivingState,
+    PolicePursuitDrivingReason DrivingReason)
+{
+    public long RouteRevision { get; init; }
+    public string LaneChangePhase { get; init; } = "None";
+}
+
 public sealed record PolicePursuitDrivingDiagnostics(
     long Revision,
     PolicePursuitDrivingState State,
@@ -269,7 +294,8 @@ public sealed record PolicePursuitTrackingResult(
     PolicePursuitSearchDiagnostics? SearchDiagnostics = null,
     PolicePursuitLaneChangeDiagnostics? LaneChangeDiagnostics = null,
     PolicePursuitDrivingDiagnostics? DrivingDiagnostics = null,
-    PolicePursuitPitDiagnostics? PitDiagnostics = null);
+    PolicePursuitPitDiagnostics? PitDiagnostics = null,
+    PolicePursuitPitEligibilityDiagnostics? PitEligibilityDiagnostics = null);
 
 public interface IPoliceAiState
 {

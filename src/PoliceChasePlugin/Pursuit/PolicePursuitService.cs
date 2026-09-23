@@ -26,6 +26,8 @@ public sealed class PolicePursuitService : IPolicePursuitService
     private LaneChangeLogSignature? _lastLaneChangeEvaluationSignature;
     private DrivingLogSignature? _lastDrivingLogSignature;
     private long? _lastLoggedPitRevision;
+    private PolicePursuitPitAbortReason? _lastPitEligibilityReason;
+    private long? _lastPitEligibilityTimestamp;
     private readonly Dictionary<int, bool> _loggedJunctionDecisions = new();
     private bool _routeTemporarilyLost;
 
@@ -65,6 +67,15 @@ public sealed class PolicePursuitService : IPolicePursuitService
                     configuration.PursuitPitLateralOffsetMeters,
                     configuration.PursuitPitCommitMilliseconds,
                     configuration.PursuitPitCooldownMilliseconds) : null));
+        if (configuration.PursuitPitEnabled)
+            Log.Information(
+                "[PoliceChase] PIT diagnostic config: enabled {Enabled}; maxDistance {MaxDistance:F1}m; maxClosing {MaxClosing:F1}km/h; offset {Offset:F2}m; commit {Commit}ms; cooldown {Cooldown}ms",
+                configuration.PursuitPitEnabled,
+                configuration.PursuitPitMaxDistanceMeters,
+                configuration.PursuitPitMaxClosingSpeedKph,
+                configuration.PursuitPitLateralOffsetMeters,
+                configuration.PursuitPitCommitMilliseconds,
+                configuration.PursuitPitCooldownMilliseconds);
     }
 
     public void UpdateOnce()
@@ -190,6 +201,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
             ResetRouteDiagnostics();
         _activeTargetSessionId = targetSessionId;
         LogPitTransition(targetSessionId, result.PitDiagnostics);
+        LogPitEligibility(targetSessionId, result.PitEligibilityDiagnostics);
 
         if (starting)
         {
@@ -283,6 +295,8 @@ public sealed class PolicePursuitService : IPolicePursuitService
         _lastLaneChangeEvaluationSignature = null;
         _lastDrivingLogSignature = null;
         _lastLoggedPitRevision = null;
+        _lastPitEligibilityReason = null;
+        _lastPitEligibilityTimestamp = null;
         _loggedJunctionDecisions.Clear();
     }
 
@@ -336,6 +350,41 @@ public sealed class PolicePursuitService : IPolicePursuitService
             diagnostics.ClosingSpeedMetersPerSecond * 3.6f,
             diagnostics.OffsetMeters,
             diagnostics.Reason);
+    }
+
+    private void LogPitEligibility(
+        byte targetSessionId,
+        PolicePursuitPitEligibilityDiagnostics? diagnostics)
+    {
+        if (!_configuration.PursuitPitEnabled || diagnostics == null
+            || diagnostics.Phase != PolicePursuitPitPhase.Idle
+            || diagnostics.RejectionReason is not { } reason)
+            return;
+
+        var now = _timeProvider.GetTimestamp();
+        if (_lastPitEligibilityReason == reason
+            && _lastPitEligibilityTimestamp.HasValue
+            && _timeProvider.GetElapsedTime(_lastPitEligibilityTimestamp.Value, now)
+                < TimeSpan.FromSeconds(5))
+            return;
+        _lastPitEligibilityReason = reason;
+        _lastPitEligibilityTimestamp = now;
+        Log.Information(
+            "[PoliceChase] PIT eligibility rejected: target {TargetSessionId}; reason {Reason}; " +
+            "navigationActive {NavigationActive}; laneFits {LaneFits}; offsetReady {OffsetReady}; " +
+            "targetAligned {TargetAligned}; ahead {Ahead:F1}m; lateral {Lateral:F1}m; headingDot {HeadingDot:F2}; " +
+            "laneWidth {LaneWidth:F1}m; currentOffset {CurrentOffset:F2}m; junctionNear {JunctionNear}; " +
+            "leftSafe {LeftSafe}; rightSafe {RightSafe}; lanePhase {LanePhase}; routeRevision {RouteRevision}; " +
+            "clearance {Clearance:F1}m; closingSpeed {ClosingSpeed:F1}km/h; driving {DrivingState}/{DrivingReason}",
+            targetSessionId, reason, diagnostics.NavigationActive, diagnostics.LaneFitsOffset,
+            diagnostics.OffsetReady, diagnostics.TargetAligned,
+            diagnostics.TargetLongitudinalMeters, diagnostics.TargetLateralMeters,
+            diagnostics.HeadingDot, diagnostics.LaneWidthMeters,
+            diagnostics.CurrentOffsetMeters, diagnostics.JunctionNear,
+            diagnostics.LeftSafe, diagnostics.RightSafe, diagnostics.LaneChangePhase,
+            diagnostics.RouteRevision, diagnostics.PhysicalClearanceMeters,
+            diagnostics.ClosingSpeedMetersPerSecond * 3.6f,
+            diagnostics.DrivingState, diagnostics.DrivingReason);
     }
 
     private void LogLaneChangeTransition(

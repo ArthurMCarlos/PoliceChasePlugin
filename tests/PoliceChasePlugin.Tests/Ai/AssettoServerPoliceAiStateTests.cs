@@ -359,6 +359,29 @@ public class AssettoServerPoliceAiStateTests
             PolicePursuitPitAbortReason.BlockedSide, 4, 1, -.8f)));
     }
 
+    [Test]
+    public void MapsPitEligibilityRejectionAndMeasurements()
+    {
+        var mapped = AssettoServerNativePolicePursuitState.MapPitEligibilityDiagnostics(
+            new AssettoServer.Server.Ai.AiPursuitPitEligibilityDiagnostics(
+                AssettoServer.Server.Ai.AiPursuitPitPhase.Idle,
+                AssettoServer.Server.Ai.AiPursuitPitAbortReason.GeometryInvalid,
+                true, true, true, false, 4, 0, -6, 2, 1,
+                false, false, true, 4, 1,
+                AssettoServer.Server.Ai.AiPursuitDrivingState.ClosePressure,
+                AssettoServer.Server.Ai.AiPursuitDrivingReason.ClosePressure)
+            { RouteRevision = 12 });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(mapped.RejectionReason,
+                Is.EqualTo(PolicePursuitPitAbortReason.GeometryInvalid));
+            Assert.That(mapped.TargetLongitudinalMeters, Is.EqualTo(-6));
+            Assert.That(mapped.TargetLateralMeters, Is.EqualTo(2));
+            Assert.That(mapped.RouteRevision, Is.EqualTo(12));
+        });
+    }
+
     [TestCase(CoreDrivingState.CatchUp, PolicePursuitDrivingState.CatchUp)]
     [TestCase(CoreDrivingState.Approach, PolicePursuitDrivingState.Approach)]
     [TestCase(CoreDrivingState.ClosePressure, PolicePursuitDrivingState.ClosePressure)]
