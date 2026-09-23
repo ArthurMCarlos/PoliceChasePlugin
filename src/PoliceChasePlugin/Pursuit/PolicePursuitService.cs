@@ -25,6 +25,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
     private long? _lastLoggedLaneChangeRevision;
     private LaneChangeLogSignature? _lastLaneChangeEvaluationSignature;
     private DrivingLogSignature? _lastDrivingLogSignature;
+    private long? _lastLoggedPitRevision;
     private readonly Dictionary<int, bool> _loggedJunctionDecisions = new();
     private bool _routeTemporarilyLost;
 
@@ -56,7 +57,14 @@ public sealed class PolicePursuitService : IPolicePursuitService
                 configuration.PursuitContactDistanceMeters,
                 configuration.PursuitMaxSpeedKph / 3.6f,
                 configuration.PursuitMaxClosingSpeedKph / 3.6f,
-                configuration.PursuitContactClosingSpeedKph / 3.6f));
+                configuration.PursuitContactClosingSpeedKph / 3.6f,
+                configuration.PursuitPitEnabled ? new PolicePursuitPitOptions(
+                    configuration.PursuitPitEnabled,
+                    configuration.PursuitPitMaxDistanceMeters,
+                    configuration.PursuitPitMaxClosingSpeedKph / 3.6f,
+                    configuration.PursuitPitLateralOffsetMeters,
+                    configuration.PursuitPitCommitMilliseconds,
+                    configuration.PursuitPitCooldownMilliseconds) : null));
     }
 
     public void UpdateOnce()
@@ -104,7 +112,10 @@ public sealed class PolicePursuitService : IPolicePursuitService
             targetSessionId.Value,
             _trackingOptions);
         if (result.Status != PolicePursuitTrackingStatus.Active)
+        {
+            LogPitTransition(targetSessionId.Value, result.PitDiagnostics);
             LogLaneChangeTransition(targetSessionId.Value, result.LaneChangeDiagnostics);
+        }
 
         switch (result.Status)
         {
@@ -178,6 +189,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
         if (starting)
             ResetRouteDiagnostics();
         _activeTargetSessionId = targetSessionId;
+        LogPitTransition(targetSessionId, result.PitDiagnostics);
 
         if (starting)
         {
@@ -270,6 +282,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
         _lastLoggedLaneChangeRevision = null;
         _lastLaneChangeEvaluationSignature = null;
         _lastDrivingLogSignature = null;
+        _lastLoggedPitRevision = null;
         _loggedJunctionDecisions.Clear();
     }
 
@@ -302,6 +315,26 @@ public sealed class PolicePursuitService : IPolicePursuitService
             diagnostics.PoliceSpeedMetersPerSecond * 3.6f,
             diagnostics.ClosingSpeedMetersPerSecond * 3.6f,
             diagnostics.RequestedSpeedMetersPerSecond * 3.6f,
+            diagnostics.Reason);
+    }
+
+    private void LogPitTransition(
+        byte targetSessionId,
+        PolicePursuitPitDiagnostics? diagnostics)
+    {
+        if (diagnostics == null || _lastLoggedPitRevision == diagnostics.Revision)
+            return;
+        _lastLoggedPitRevision = diagnostics.Revision;
+        Log.Information(
+            "[PoliceChase] Pursuit PIT {EventKind}; target {TargetSessionId}; " +
+            "side {Side}; clearance {Clearance:F1}m; closingSpeed {ClosingSpeed:F1}km/h; " +
+            "offset {Offset:F2}m; reason {Reason}",
+            diagnostics.EventKind,
+            targetSessionId,
+            diagnostics.Side,
+            diagnostics.PhysicalClearanceMeters,
+            diagnostics.ClosingSpeedMetersPerSecond * 3.6f,
+            diagnostics.OffsetMeters,
             diagnostics.Reason);
     }
 

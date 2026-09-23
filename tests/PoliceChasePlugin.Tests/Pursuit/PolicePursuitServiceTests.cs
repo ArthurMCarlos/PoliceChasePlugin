@@ -98,6 +98,47 @@ public class PolicePursuitServiceTests
     }
 
     [Test]
+    public void PitConfigurationIsOptInAndConvertedToMetersPerSecond()
+    {
+        var context = CreateContext(configure: configuration =>
+        {
+            configuration.PursuitAggressiveDrivingEnabled = true;
+            configuration.PursuitContactEnabled = true;
+            configuration.PursuitPitEnabled = true;
+            configuration.PursuitPitMaxClosingSpeedKph = 9;
+        });
+        context.State.NextTrackingResult = ActiveResult();
+        context.Service.UpdateOnce();
+        Assert.That(context.State.TrackRequests.Single().Options.Driving?.Pit,
+            Is.EqualTo(new PolicePursuitPitOptions(true, 6, 2.5f, .8f, 1200, 3000)));
+    }
+
+    [Test]
+    public void PitEventsLogOncePerRevisionAndResetOnTargetRelease()
+    {
+        var context = CreateContext(configure: configuration =>
+        {
+            configuration.PursuitAggressiveDrivingEnabled = true;
+            configuration.PursuitContactEnabled = true;
+            configuration.PursuitPitEnabled = true;
+        });
+        var pit = new PolicePursuitPitDiagnostics(1, PolicePursuitPitEventKind.Started,
+            PolicePursuitPitSide.Left, PolicePursuitPitAbortReason.None, 4, 1, .8f);
+        context.State.Enqueue(new PolicePursuitTrackingResult(
+            PolicePursuitTrackingStatus.Active, 4, 20, PitDiagnostics: pit));
+        context.State.Enqueue(new PolicePursuitTrackingResult(
+            PolicePursuitTrackingStatus.Active, 4, 20, PitDiagnostics: pit));
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+        Assert.That(LogCount("Pursuit PIT"), Is.EqualTo(1));
+        context.Service.Release();
+        context.State.Enqueue(new PolicePursuitTrackingResult(
+            PolicePursuitTrackingStatus.Active, 4, 20, PitDiagnostics: pit));
+        context.Service.UpdateOnce();
+        Assert.That(LogCount("Pursuit PIT"), Is.EqualTo(2));
+    }
+
+    [Test]
     public void AggressiveModeKeepsTemporaryRouteLossWithoutLegacySpeedWrite()
     {
         var context = CreateContext(configure: configuration =>

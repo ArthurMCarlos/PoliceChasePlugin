@@ -28,4 +28,10 @@ public class PoliceChaseConfiguration : IValidateConfiguration<PoliceChaseConfig
     public float PursuitContactDistanceMeters { get; set; } = 3;
     public float PursuitMaxClosingSpeedKph { get; set; } = 35;
     public float PursuitContactClosingSpeedKph { get; set; } = 5;
+    public bool PursuitPitEnabled { get; set; }
+    public float PursuitPitMaxDistanceMeters { get; set; } = 6;
+    public float PursuitPitMaxClosingSpeedKph { get; set; } = 10;
+    public float PursuitPitLateralOffsetMeters { get; set; } = 0.8f;
+    public int PursuitPitCommitMilliseconds { get; set; } = 1200;
+    public int PursuitPitCooldownMilliseconds { get; set; } = 3000;
 }

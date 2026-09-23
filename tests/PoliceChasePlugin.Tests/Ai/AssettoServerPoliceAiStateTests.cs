@@ -339,6 +339,26 @@ public class AssettoServerPoliceAiStateTests
             true)));
     }
 
+    [Test]
+    public void MapsOptionalPitSettingsAndEvents()
+    {
+        var options = AssettoServerNativePolicePursuitState.MapDrivingOptions(
+            new PolicePursuitDrivingOptions(true, true, 100, 15, 3, 50, 10, 1,
+                new PolicePursuitPitOptions(true, 6, 2.5f, .8f, 1200, 3000)));
+        Assert.That(options.Pit, Is.EqualTo(new AssettoServer.Server.Ai.AiPursuitPitOptions(
+            true, 6, 2.5f, .8f, 1200, 3000)));
+
+        var mapped = AssettoServerNativePolicePursuitState.MapPitDiagnostics(
+            new AssettoServer.Server.Ai.AiPursuitPitDiagnostics(
+                7, AssettoServer.Server.Ai.AiPursuitPitEventKind.Aborted,
+                AssettoServer.Server.Ai.AiPursuitPitSide.Right,
+                AssettoServer.Server.Ai.AiPursuitPitAbortReason.BlockedSide,
+                4, 1, -.8f));
+        Assert.That(mapped, Is.EqualTo(new PolicePursuitPitDiagnostics(
+            7, PolicePursuitPitEventKind.Aborted, PolicePursuitPitSide.Right,
+            PolicePursuitPitAbortReason.BlockedSide, 4, 1, -.8f)));
+    }
+
     [TestCase(CoreDrivingState.CatchUp, PolicePursuitDrivingState.CatchUp)]
     [TestCase(CoreDrivingState.Approach, PolicePursuitDrivingState.Approach)]
     [TestCase(CoreDrivingState.ClosePressure, PolicePursuitDrivingState.ClosePressure)]

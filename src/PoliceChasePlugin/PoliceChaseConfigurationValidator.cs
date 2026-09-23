@@ -63,5 +63,30 @@ public class PoliceChaseConfigurationValidator : AbstractValidator<PoliceChaseCo
             .GreaterThanOrEqualTo(0)
             .LessThanOrEqualTo(configuration =>
                 configuration.PursuitMaxClosingSpeedKph);
+        RuleFor(configuration => configuration.PursuitPitEnabled)
+            .Must((configuration, enabled) =>
+                !enabled || configuration.PursuitAggressiveDrivingEnabled
+                && configuration.PursuitContactEnabled);
+        RuleFor(configuration => configuration.PursuitPitMaxDistanceMeters)
+            .Cascade(CascadeMode.Stop)
+            .Must(float.IsFinite)
+            .GreaterThan(configuration => configuration.PursuitContactDistanceMeters)
+            .LessThanOrEqualTo(configuration => configuration.PursuitCloseDistanceMeters)
+            .When(configuration => configuration.PursuitPitEnabled);
+        RuleFor(configuration => configuration.PursuitPitMaxClosingSpeedKph)
+            .Cascade(CascadeMode.Stop)
+            .Must(float.IsFinite)
+            .GreaterThan(0)
+            .LessThanOrEqualTo(configuration => configuration.PursuitMaxClosingSpeedKph)
+            .When(configuration => configuration.PursuitPitEnabled);
+        RuleFor(configuration => configuration.PursuitPitLateralOffsetMeters)
+            .Cascade(CascadeMode.Stop)
+            .Must(float.IsFinite)
+            .GreaterThan(0)
+            .LessThanOrEqualTo(1.1f);
+        RuleFor(configuration => configuration.PursuitPitCommitMilliseconds)
+            .InclusiveBetween(200, 5000);
+        RuleFor(configuration => configuration.PursuitPitCooldownMilliseconds)
+            .InclusiveBetween(0, 30_000);
     }
 }

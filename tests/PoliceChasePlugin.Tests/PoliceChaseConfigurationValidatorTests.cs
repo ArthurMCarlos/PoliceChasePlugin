@@ -243,6 +243,98 @@ public class PoliceChaseConfigurationValidatorTests
             Does.Contain(expectedProperty));
     }
 
+    [Test]
+    public void EnabledPitRequiresAggressiveDrivingAndContact()
+    {
+        var configuration = new PoliceChaseConfiguration { PursuitPitEnabled = true };
+        var noAggressive = _validator.Validate(configuration);
+        configuration.PursuitAggressiveDrivingEnabled = true;
+        configuration.PursuitContactEnabled = false;
+        var noContact = _validator.Validate(configuration);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(noAggressive.Errors.Select(error => error.PropertyName),
+                Does.Contain(nameof(PoliceChaseConfiguration.PursuitPitEnabled)));
+            Assert.That(noContact.Errors.Select(error => error.PropertyName),
+                Does.Contain(nameof(PoliceChaseConfiguration.PursuitPitEnabled)));
+        });
+    }
+
+    [TestCase(3, nameof(PoliceChaseConfiguration.PursuitPitMaxDistanceMeters))]
+    [TestCase(float.NaN, nameof(PoliceChaseConfiguration.PursuitPitMaxDistanceMeters))]
+    [TestCase(0, nameof(PoliceChaseConfiguration.PursuitPitMaxClosingSpeedKph))]
+    [TestCase(float.PositiveInfinity, nameof(PoliceChaseConfiguration.PursuitPitMaxClosingSpeedKph))]
+    [TestCase(0, nameof(PoliceChaseConfiguration.PursuitPitLateralOffsetMeters))]
+    [TestCase(1.2f, nameof(PoliceChaseConfiguration.PursuitPitLateralOffsetMeters))]
+    public void RejectsUnsafePitMagnitude(float value, string property)
+    {
+        var configuration = new PoliceChaseConfiguration
+        {
+            PursuitAggressiveDrivingEnabled = true,
+            PursuitPitEnabled = true
+        };
+        switch (property)
+        {
+            case nameof(PoliceChaseConfiguration.PursuitPitMaxDistanceMeters):
+                configuration.PursuitPitMaxDistanceMeters = value;
+                break;
+            case nameof(PoliceChaseConfiguration.PursuitPitMaxClosingSpeedKph):
+                configuration.PursuitPitMaxClosingSpeedKph = value;
+                break;
+            case nameof(PoliceChaseConfiguration.PursuitPitLateralOffsetMeters):
+                configuration.PursuitPitLateralOffsetMeters = value;
+                break;
+        }
+
+        Assert.That(_validator.Validate(configuration).Errors.Select(error => error.PropertyName),
+            Does.Contain(property));
+    }
+
+    [TestCase(199, nameof(PoliceChaseConfiguration.PursuitPitCommitMilliseconds))]
+    [TestCase(5001, nameof(PoliceChaseConfiguration.PursuitPitCommitMilliseconds))]
+    [TestCase(-1, nameof(PoliceChaseConfiguration.PursuitPitCooldownMilliseconds))]
+    [TestCase(30001, nameof(PoliceChaseConfiguration.PursuitPitCooldownMilliseconds))]
+    public void RejectsUnsafePitTiming(int value, string property)
+    {
+        var configuration = new PoliceChaseConfiguration();
+        if (property == nameof(PoliceChaseConfiguration.PursuitPitCommitMilliseconds))
+            configuration.PursuitPitCommitMilliseconds = value;
+        else
+            configuration.PursuitPitCooldownMilliseconds = value;
+
+        Assert.That(_validator.Validate(configuration).Errors.Select(error => error.PropertyName),
+            Does.Contain(property));
+    }
+
+    [Test]
+    public void AcceptsOptedInPitWithSafeDefaults()
+    {
+        var result = _validator.Validate(new PoliceChaseConfiguration
+        {
+            PoliceCarSessionId = 12,
+            PursuitAggressiveDrivingEnabled = true,
+            PursuitPitEnabled = true
+        });
+
+        Assert.That(result.IsValid, Is.True);
+    }
+
+    [Test]
+    public void DisabledPitDoesNotInvalidateExistingCloseDistanceConfiguration()
+    {
+        var result = _validator.Validate(new PoliceChaseConfiguration
+        {
+            PoliceCarSessionId = 12,
+            PursuitAggressiveDrivingEnabled = true,
+            PursuitCloseDistanceMeters = 5,
+            PursuitContactDistanceMeters = 3,
+            PursuitPitEnabled = false
+        });
+
+        Assert.That(result.IsValid, Is.True);
+    }
+
     [TestCase(-1)]
     [TestCase(255)]
     public void RejectsInvalidPoliceSessionIdWhenEnabled(int sessionId)

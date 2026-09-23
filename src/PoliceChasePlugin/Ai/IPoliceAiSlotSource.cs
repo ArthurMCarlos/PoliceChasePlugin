@@ -52,7 +52,34 @@ public sealed record PolicePursuitDrivingOptions(
     float ContactDistanceMeters,
     float MaximumSpeedMetersPerSecond,
     float MaximumClosingSpeedMetersPerSecond,
-    float ContactClosingSpeedMetersPerSecond);
+    float ContactClosingSpeedMetersPerSecond,
+    PolicePursuitPitOptions? Pit = null);
+
+public sealed record PolicePursuitPitOptions(
+    bool Enabled,
+    float MaxDistanceMeters,
+    float MaxClosingSpeedMetersPerSecond,
+    float LateralOffsetMeters,
+    int CommitMilliseconds,
+    int CooldownMilliseconds);
+
+public enum PolicePursuitPitPhase { Idle, Armed, Attempting, Cooldown }
+public enum PolicePursuitPitSide { Left, Right }
+public enum PolicePursuitPitEventKind { Armed, Started, Aborted, Contact }
+public enum PolicePursuitPitAbortReason
+{
+    None, Disabled, RouteLost, TargetChanged, OutOfRange, ClosingSpeedUnsafe,
+    BlockedSide, LaneChange, Junction, Recovery, GeometryInvalid, CommitElapsed
+}
+
+public sealed record PolicePursuitPitDiagnostics(
+    long Revision,
+    PolicePursuitPitEventKind EventKind,
+    PolicePursuitPitSide? Side,
+    PolicePursuitPitAbortReason Reason,
+    float PhysicalClearanceMeters,
+    float ClosingSpeedMetersPerSecond,
+    float OffsetMeters);
 
 public sealed record PolicePursuitDrivingDiagnostics(
     long Revision,
@@ -241,7 +268,8 @@ public sealed record PolicePursuitTrackingResult(
     PolicePursuitRouteDiagnostics? RouteDiagnostics = null,
     PolicePursuitSearchDiagnostics? SearchDiagnostics = null,
     PolicePursuitLaneChangeDiagnostics? LaneChangeDiagnostics = null,
-    PolicePursuitDrivingDiagnostics? DrivingDiagnostics = null);
+    PolicePursuitDrivingDiagnostics? DrivingDiagnostics = null,
+    PolicePursuitPitDiagnostics? PitDiagnostics = null);
 
 public interface IPoliceAiState
 {

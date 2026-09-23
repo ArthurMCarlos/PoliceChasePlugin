@@ -32,6 +32,12 @@ public class PoliceChaseConfigurationTests
             Assert.That(configuration.PursuitContactDistanceMeters, Is.EqualTo(3));
             Assert.That(configuration.PursuitMaxClosingSpeedKph, Is.EqualTo(35));
             Assert.That(configuration.PursuitContactClosingSpeedKph, Is.EqualTo(5));
+            Assert.That(configuration.PursuitPitEnabled, Is.False);
+            Assert.That(configuration.PursuitPitMaxDistanceMeters, Is.EqualTo(6));
+            Assert.That(configuration.PursuitPitMaxClosingSpeedKph, Is.EqualTo(10));
+            Assert.That(configuration.PursuitPitLateralOffsetMeters, Is.EqualTo(0.8f));
+            Assert.That(configuration.PursuitPitCommitMilliseconds, Is.EqualTo(1200));
+            Assert.That(configuration.PursuitPitCooldownMilliseconds, Is.EqualTo(3000));
         });
     }
 }
