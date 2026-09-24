@@ -286,8 +286,22 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             MapDrivingReason(diagnostics.DrivingReason))
         {
             RouteRevision = diagnostics.RouteRevision,
-            LaneChangePhase = diagnostics.LaneChangePhase.ToString()
+            LaneChangePhase = diagnostics.LaneChangePhase.ToString(),
+            SideSafety = diagnostics.SideSafety is { } side
+                ? new PolicePursuitPitSideSafetyDiagnostics(side.LeftReason, side.RightReason,
+                    MapPitBlocker(side.LeftBlocker), MapPitBlocker(side.RightBlocker),
+                    side.PoliceLengthMeters, side.PolicePosition.X,
+                    side.PolicePosition.Y, side.PolicePosition.Z)
+                : null
         };
+
+    private static PolicePursuitPitBlocker? MapPitBlocker(AiPursuitPitObstacle? blocker) =>
+        blocker is { } vehicle
+            ? new PolicePursuitPitBlocker(vehicle.SessionId, vehicle.Kind, vehicle.Model,
+                vehicle.SpawnCounter, vehicle.LengthMeters,
+                vehicle.Position.X, vehicle.Position.Y, vehicle.Position.Z,
+                vehicle.Velocity.X, vehicle.Velocity.Y, vehicle.Velocity.Z)
+            : null;
 
     internal static PolicePursuitDrivingDiagnostics MapDrivingDiagnostics(
         CoreDrivingDiagnostics diagnostics) =>

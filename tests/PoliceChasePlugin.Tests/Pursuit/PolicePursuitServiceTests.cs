@@ -150,7 +150,12 @@ public class PolicePursuitServiceTests
             PolicePursuitPitPhase.Idle, PolicePursuitPitAbortReason.GeometryInvalid,
             true, true, true, false, 4, 1, 4, 0, .9f,
             false, true, true, 5, 3.6f, PolicePursuitDrivingState.ClosePressure,
-            PolicePursuitDrivingReason.ClosePressure);
+            PolicePursuitDrivingReason.ClosePressure)
+        {
+            SideSafety = new PolicePursuitPitSideSafetyDiagnostics("BlockedSide", "Safe",
+                new PolicePursuitPitBlocker(8, "AI", "traffic", 4, 0, 3, 7, 2, 0, 0, 20),
+                null, 0, 0, 0, 0)
+        };
         context.State.Enqueue(ActiveResult() with { PitEligibilityDiagnostics = blocked });
         context.State.Enqueue(ActiveResult() with { PitEligibilityDiagnostics = blocked });
         context.State.Enqueue(ActiveResult() with { PitEligibilityDiagnostics = blocked with
@@ -179,6 +184,10 @@ public class PolicePursuitServiceTests
                 "reason GeometryInvalid; navigationActive True; laneFits True")), Is.True);
             Assert.That(_sink.Events.Any(e => e.RenderMessage().Contains(
                 "ahead 4.0m; lateral 0.0m; headingDot 0.90")), Is.True);
+            Assert.That(_sink.Events.Any(e => e.RenderMessage().Contains(
+                "sideSafetyEvaluated True")), Is.True);
+            Assert.That(_sink.Events.Any(e => e.RenderMessage().Contains(
+                "SessionId: 8")), Is.True);
         });
     }
 

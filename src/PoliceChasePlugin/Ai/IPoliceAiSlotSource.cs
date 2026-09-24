@@ -104,7 +104,18 @@ public sealed record PolicePursuitPitEligibilityDiagnostics(
 {
     public long RouteRevision { get; init; }
     public string LaneChangePhase { get; init; } = "None";
+    public PolicePursuitPitSideSafetyDiagnostics? SideSafety { get; init; }
 }
+
+public sealed record PolicePursuitPitBlocker(
+    byte SessionId, string Kind, string? Model, byte? SpawnCounter,
+    float LengthMeters, float X, float Y, float Z,
+    float VelocityX, float VelocityY, float VelocityZ);
+
+public sealed record PolicePursuitPitSideSafetyDiagnostics(
+    string LeftReason, string RightReason,
+    PolicePursuitPitBlocker? LeftBlocker, PolicePursuitPitBlocker? RightBlocker,
+    float PoliceLengthMeters, float PoliceX, float PoliceY, float PoliceZ);
 
 public sealed record PolicePursuitDrivingDiagnostics(
     long Revision,

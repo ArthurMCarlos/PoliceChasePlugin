@@ -375,7 +375,8 @@ public sealed class PolicePursuitService : IPolicePursuitService
             "targetAligned {TargetAligned}; ahead {Ahead:F1}m; lateral {Lateral:F1}m; headingDot {HeadingDot:F2}; " +
             "laneWidth {LaneWidth:F1}m; currentOffset {CurrentOffset:F2}m; junctionNear {JunctionNear}; " +
             "leftSafe {LeftSafe}; rightSafe {RightSafe}; lanePhase {LanePhase}; routeRevision {RouteRevision}; " +
-            "clearance {Clearance:F1}m; closingSpeed {ClosingSpeed:F1}km/h; driving {DrivingState}/{DrivingReason}",
+            "clearance {Clearance:F1}m; closingSpeed {ClosingSpeed:F1}km/h; driving {DrivingState}/{DrivingReason}; " +
+            "sideSafetyEvaluated {SideSafetyEvaluated}; sideSafety {@SideSafety}",
             targetSessionId, reason, diagnostics.NavigationActive, diagnostics.LaneFitsOffset,
             diagnostics.OffsetReady, diagnostics.TargetAligned,
             diagnostics.TargetLongitudinalMeters, diagnostics.TargetLateralMeters,
@@ -384,7 +385,8 @@ public sealed class PolicePursuitService : IPolicePursuitService
             diagnostics.LeftSafe, diagnostics.RightSafe, diagnostics.LaneChangePhase,
             diagnostics.RouteRevision, diagnostics.PhysicalClearanceMeters,
             diagnostics.ClosingSpeedMetersPerSecond * 3.6f,
-            diagnostics.DrivingState, diagnostics.DrivingReason);
+            diagnostics.DrivingState, diagnostics.DrivingReason,
+            diagnostics.SideSafety != null, diagnostics.SideSafety);
     }
 
     private void LogLaneChangeTransition(

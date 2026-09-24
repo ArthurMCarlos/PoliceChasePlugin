@@ -370,7 +370,14 @@ public class AssettoServerPoliceAiStateTests
                 false, false, true, 4, 1,
                 AssettoServer.Server.Ai.AiPursuitDrivingState.ClosePressure,
                 AssettoServer.Server.Ai.AiPursuitDrivingReason.ClosePressure)
-            { RouteRevision = 12 });
+            {
+                RouteRevision = 12,
+                SideSafety = new AssettoServer.Server.Ai.AiPursuitPitSideSafetyResult(
+                    false, true, "BlockedSide", "Safe",
+                    new AssettoServer.Server.Ai.AiPursuitPitObstacle(8,
+                        new System.Numerics.Vector3(3, 7, 2), System.Numerics.Vector3.UnitZ * 20,
+                        0, "AI", "traffic", 4), null, 0, System.Numerics.Vector3.Zero)
+            });
 
         Assert.Multiple(() =>
         {
@@ -379,6 +386,11 @@ public class AssettoServerPoliceAiStateTests
             Assert.That(mapped.TargetLongitudinalMeters, Is.EqualTo(-6));
             Assert.That(mapped.TargetLateralMeters, Is.EqualTo(2));
             Assert.That(mapped.RouteRevision, Is.EqualTo(12));
+            Assert.That(mapped.SideSafety?.LeftBlocker?.SessionId, Is.EqualTo(8));
+            Assert.That(mapped.SideSafety?.LeftBlocker?.Y, Is.EqualTo(7));
+            Assert.That(mapped.SideSafety?.LeftBlocker?.VelocityZ, Is.EqualTo(20));
+            Assert.That(mapped.SideSafety?.RightBlocker, Is.Null);
+            Assert.That(mapped.SideSafety?.RightReason, Is.EqualTo("Safe"));
         });
     }
 
