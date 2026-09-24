@@ -123,7 +123,11 @@ public class PolicePursuitServiceTests
             configuration.PursuitPitEnabled = true;
         });
         var pit = new PolicePursuitPitDiagnostics(1, PolicePursuitPitEventKind.Started,
-            PolicePursuitPitSide.Left, PolicePursuitPitAbortReason.None, 4, 1, .8f);
+            PolicePursuitPitSide.Left, PolicePursuitPitAbortReason.None, 4, 1, .8f)
+        {
+            Continuity = new(45, 46, PolicePursuitPitPhase.Armed, "Active", true, true,
+                170960, 170962, 3, true, "Cooldown", false, true, true)
+        };
         context.State.Enqueue(new PolicePursuitTrackingResult(
             PolicePursuitTrackingStatus.Active, 4, 20, PitDiagnostics: pit));
         context.State.Enqueue(new PolicePursuitTrackingResult(
@@ -131,6 +135,15 @@ public class PolicePursuitServiceTests
         context.Service.UpdateOnce();
         context.Service.UpdateOnce();
         Assert.That(LogCount("Pursuit PIT"), Is.EqualTo(1));
+        var rendered = _sink.Events.Single(e => e.RenderMessage().Contains("Pursuit PIT")).RenderMessage();
+        Assert.Multiple(() =>
+        {
+            Assert.That(rendered, Does.Contain("ArmedRouteRevision: 45"));
+            Assert.That(rendered, Does.Contain("CurrentRouteRevision: 46"));
+            Assert.That(rendered, Does.Contain("PolicePoint: 170960"));
+            Assert.That(rendered, Does.Contain("TargetPoint: 170962"));
+            Assert.That(rendered, Does.Contain("NavigationActive: True"));
+        });
         context.Service.Release();
         context.State.Enqueue(new PolicePursuitTrackingResult(
             PolicePursuitTrackingStatus.Active, 4, 20, PitDiagnostics: pit));

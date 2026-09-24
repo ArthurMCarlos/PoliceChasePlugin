@@ -233,7 +233,26 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             MapPitAbortReason(diagnostics.Reason),
             diagnostics.PhysicalClearanceMeters,
             diagnostics.ClosingSpeedMetersPerSecond,
-            diagnostics.OffsetMeters);
+            diagnostics.OffsetMeters)
+        {
+            Continuity = diagnostics.Continuity is { } continuity
+                ? new PolicePursuitPitContinuityDiagnostics(
+                    continuity.ArmedRouteRevision, continuity.CurrentRouteRevision,
+                    continuity.PreviousPhase switch
+                    {
+                        AiPursuitPitPhase.Idle => PolicePursuitPitPhase.Idle,
+                        AiPursuitPitPhase.Armed => PolicePursuitPitPhase.Armed,
+                        AiPursuitPitPhase.Attempting => PolicePursuitPitPhase.Attempting,
+                        AiPursuitPitPhase.Cooldown => PolicePursuitPitPhase.Cooldown,
+                        _ => throw new ArgumentOutOfRangeException(nameof(diagnostics))
+                    },
+                    continuity.NavigationStatus, continuity.NavigationActive,
+                    continuity.RouteAvailable, continuity.PolicePoint, continuity.TargetPoint,
+                    continuity.RouteDistanceMeters, continuity.TargetAligned,
+                    continuity.LaneChangePhase.ToString(), continuity.JunctionNear,
+                    continuity.LaneFitsOffset, continuity.OffsetReady)
+                : null
+        };
 
     private static PolicePursuitPitAbortReason MapPitAbortReason(
         AiPursuitPitAbortReason reason) =>

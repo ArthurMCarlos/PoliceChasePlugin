@@ -342,14 +342,15 @@ public sealed class PolicePursuitService : IPolicePursuitService
         Log.Information(
             "[PoliceChase] Pursuit PIT {EventKind}; target {TargetSessionId}; " +
             "side {Side}; clearance {Clearance:F1}m; closingSpeed {ClosingSpeed:F1}km/h; " +
-            "offset {Offset:F2}m; reason {Reason}",
+            "offset {Offset:F2}m; reason {Reason}; continuity {@Continuity}",
             diagnostics.EventKind,
             targetSessionId,
             diagnostics.Side,
             diagnostics.PhysicalClearanceMeters,
             diagnostics.ClosingSpeedMetersPerSecond * 3.6f,
             diagnostics.OffsetMeters,
-            diagnostics.Reason);
+            diagnostics.Reason,
+            diagnostics.Continuity);
     }
 
     private void LogPitEligibility(

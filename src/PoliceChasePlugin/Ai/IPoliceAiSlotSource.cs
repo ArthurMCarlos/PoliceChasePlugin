@@ -79,7 +79,26 @@ public sealed record PolicePursuitPitDiagnostics(
     PolicePursuitPitAbortReason Reason,
     float PhysicalClearanceMeters,
     float ClosingSpeedMetersPerSecond,
-    float OffsetMeters);
+    float OffsetMeters)
+{
+    public PolicePursuitPitContinuityDiagnostics? Continuity { get; init; }
+}
+
+public sealed record PolicePursuitPitContinuityDiagnostics(
+    long ArmedRouteRevision,
+    long? CurrentRouteRevision,
+    PolicePursuitPitPhase PreviousPhase,
+    string NavigationStatus,
+    bool NavigationActive,
+    bool RouteAvailable,
+    int? PolicePoint,
+    int? TargetPoint,
+    float? RouteDistanceMeters,
+    bool? TargetAligned,
+    string LaneChangePhase,
+    bool? JunctionNear,
+    bool? LaneFitsOffset,
+    bool? OffsetReady);
 
 // Temporary, observational diagnostics for PIT eligibility during server tests.
 public sealed record PolicePursuitPitEligibilityDiagnostics(

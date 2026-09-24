@@ -360,6 +360,37 @@ public class AssettoServerPoliceAiStateTests
     }
 
     [Test]
+    public void MapsPitContinuityWithoutLosingUnknownRouteFields()
+    {
+        var core = new AssettoServer.Server.Ai.AiPursuitPitDiagnostics(
+            2, AssettoServer.Server.Ai.AiPursuitPitEventKind.Started,
+            AssettoServer.Server.Ai.AiPursuitPitSide.Left,
+            AssettoServer.Server.Ai.AiPursuitPitAbortReason.None, 5.3f, 8.2f / 3.6f, .8f)
+        {
+            Continuity = new(45, 46, AssettoServer.Server.Ai.AiPursuitPitPhase.Armed,
+                "Active", true, true, 170960, 170962, 3, true,
+                AssettoServer.Server.Ai.AiLaneChangePhase.Cooldown, false, true, true)
+        };
+        var mapped = AssettoServerNativePolicePursuitState.MapPitDiagnostics(core);
+        Assert.That(mapped.Continuity, Is.EqualTo(new PolicePursuitPitContinuityDiagnostics(
+            45, 46, PolicePursuitPitPhase.Armed, "Active", true, true,
+            170960, 170962, 3, true, "Cooldown", false, true, true)));
+        var unavailable = core with
+        {
+            Continuity = core.Continuity with
+            {
+                CurrentRouteRevision = null, NavigationStatus = "NoRoute",
+                NavigationActive = false, RouteAvailable = false,
+                TargetPoint = null, RouteDistanceMeters = null, TargetAligned = null,
+                JunctionNear = null, LaneFitsOffset = null, OffsetReady = null
+            }
+        };
+        Assert.That(AssettoServerNativePolicePursuitState.MapPitDiagnostics(unavailable).Continuity,
+            Is.EqualTo(new PolicePursuitPitContinuityDiagnostics(45, null, PolicePursuitPitPhase.Armed,
+                "NoRoute", false, false, 170960, null, null, null, "Cooldown", null, null, null)));
+    }
+
+    [Test]
     public void MapsPitEligibilityRejectionAndMeasurements()
     {
         var mapped = AssettoServerNativePolicePursuitState.MapPitEligibilityDiagnostics(
