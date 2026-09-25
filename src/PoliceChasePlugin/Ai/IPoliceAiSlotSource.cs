@@ -11,7 +11,8 @@ public enum PolicePursuitTrackingStatus
     RouteTemporarilyUnavailable,
     MaxDistanceExceeded,
     NoRoute,
-    TargetUnavailable
+    TargetUnavailable,
+    Escaped
 }
 
 public sealed record PolicePursuitTrackingOptions(
@@ -20,7 +21,18 @@ public sealed record PolicePursuitTrackingOptions(
     int MaximumVisitedNodes,
     int RouteGraceMilliseconds,
     PolicePursuitLaneChangeOptions? LaneChange = null,
-    PolicePursuitDrivingOptions? Driving = null);
+    PolicePursuitDrivingOptions? Driving = null)
+{
+    public PolicePursuitCloseOptions? ClosePursuit { get; init; }
+}
+
+public sealed record PolicePursuitCloseOptions(
+    float AssistStartMeters, float AssistFullMeters,
+    float MaxAdvantageMetersPerSecond, float MaxAccelerationMetersPerSecondSquared,
+    float MaxJerkMetersPerSecondCubed, float MaxSpeedMetersPerSecond,
+    int ObstacleHoldMilliseconds, float ObstacleDeficitMetersPerSecond,
+    float BypassLookaheadMeters, float ReturnClearanceMeters,
+    float EscapeDistanceMeters, int EscapeHoldMilliseconds, int RearmDelayMilliseconds);
 
 public enum PolicePursuitDrivingState
 {
@@ -194,7 +206,9 @@ public enum PolicePursuitLaneChangeDiagnosticReason
 public enum PolicePursuitLaneMotivation
 {
     FutureJunction,
-    TargetLaneAlignment
+    TargetLaneAlignment,
+    TrafficBypass,
+    TrafficReturn
 }
 
 public enum PolicePursuitLanePhysicalRelation
@@ -325,7 +339,19 @@ public sealed record PolicePursuitTrackingResult(
     PolicePursuitLaneChangeDiagnostics? LaneChangeDiagnostics = null,
     PolicePursuitDrivingDiagnostics? DrivingDiagnostics = null,
     PolicePursuitPitDiagnostics? PitDiagnostics = null,
-    PolicePursuitPitEligibilityDiagnostics? PitEligibilityDiagnostics = null);
+    PolicePursuitPitEligibilityDiagnostics? PitEligibilityDiagnostics = null)
+{
+    public PolicePursuitCloseDiagnostics? CloseDiagnostics { get; init; }
+}
+
+public sealed record PolicePursuitCloseDiagnostics(
+    float? PhysicalClearanceMeters, float? RouteDistanceMeters,
+    float? TargetSpeedMetersPerSecond, float? PoliceSpeedMetersPerSecond,
+    float? RequestedSpeedMetersPerSecond, float? EffectiveSpeedMetersPerSecond,
+    float? AppliedAcceleration, string? Limiter, bool AssistActive, string TacticPhase, bool EscapePending)
+{
+    public long Revision { get; init; }
+}
 
 public interface IPoliceAiState
 {

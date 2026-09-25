@@ -5,6 +5,7 @@ namespace PoliceChasePlugin.Tests.Players;
 internal sealed class FakePolicePlayerSource : IPolicePlayerSource
 {
     private readonly List<PolicePlayerSnapshot> _players = new();
+    private long _generation;
 
     public event Action<PolicePlayerChange>? Changed;
     public int StartCount { get; private set; }
@@ -17,7 +18,7 @@ internal sealed class FakePolicePlayerSource : IPolicePlayerSource
 
     public void Connect(byte id, string name, bool ready = false)
     {
-        var player = new PolicePlayerSnapshot(id, name, ready);
+        var player = new PolicePlayerSnapshot(id, name, ready) { ConnectionGeneration = ++_generation };
         _players.Add(player);
         Changed?.Invoke(new PolicePlayerChange(PolicePlayerChangeKind.Connected, player));
     }
@@ -29,6 +30,17 @@ internal sealed class FakePolicePlayerSource : IPolicePlayerSource
         _players[index] = ready;
         Changed?.Invoke(new PolicePlayerChange(PolicePlayerChangeKind.Ready, ready));
     }
+
+    public PolicePlayerSnapshot ReplaceBeforeDisconnect(byte id)
+    {
+        var previous = _players.Single(p => p.SessionId == id);
+        _players.Remove(previous);
+        Connect(id, "Replacement", true);
+        return previous;
+    }
+
+    public void DeliverLateDisconnect(PolicePlayerSnapshot previous) =>
+        Changed?.Invoke(new(PolicePlayerChangeKind.Disconnected, previous));
 
     public void Disconnect(byte id)
     {

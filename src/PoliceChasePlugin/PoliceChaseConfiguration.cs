@@ -34,4 +34,34 @@ public class PoliceChaseConfiguration : IValidateConfiguration<PoliceChaseConfig
     public float PursuitPitLateralOffsetMeters { get; set; } = 0.8f;
     public int PursuitPitCommitMilliseconds { get; set; } = 1200;
     public int PursuitPitCooldownMilliseconds { get; set; } = 3000;
+    public bool PursuitCloseEnabled { get; set; }
+    public float PursuitCloseAssistStartMeters { get; set; } = 60;
+    public float PursuitCloseAssistFullMeters { get; set; } = 250;
+    public float PursuitCloseMaxAdvantageKph { get; set; } = 80;
+    public float PursuitCloseMaxAccelerationMetersPerSecondSquared { get; set; } = 10;
+    public float PursuitCloseMaxJerkMetersPerSecondCubed { get; set; } = 5;
+    public float PursuitCloseMaxSpeedKph { get; set; } = 400;
+    public int PursuitCloseObstacleHoldMilliseconds { get; set; } = 1000;
+    public float PursuitCloseObstacleDeficitKph { get; set; } = 10;
+    public float PursuitCloseBypassLookaheadMeters { get; set; } = 150;
+    public float PursuitCloseReturnClearanceMeters { get; set; } = 12;
+    public float PursuitCloseEscapeDistanceMeters { get; set; } = 800;
+    public int PursuitCloseEscapeHoldMilliseconds { get; set; } = 15000;
+    public int PursuitCloseRearmDelayMilliseconds { get; set; } = 60000;
+
+    internal Ai.PolicePursuitCloseOptions? CreateClosePursuitOptions() =>
+        !PursuitCloseEnabled ? null : new(
+            PursuitCloseAssistStartMeters,
+            PursuitCloseAssistFullMeters,
+            PursuitCloseMaxAdvantageKph / 3.6f,
+            PursuitCloseMaxAccelerationMetersPerSecondSquared,
+            PursuitCloseMaxJerkMetersPerSecondCubed,
+            PursuitCloseMaxSpeedKph / 3.6f,
+            PursuitCloseObstacleHoldMilliseconds,
+            PursuitCloseObstacleDeficitKph / 3.6f,
+            PursuitCloseBypassLookaheadMeters,
+            PursuitCloseReturnClearanceMeters,
+            PursuitCloseEscapeDistanceMeters,
+            PursuitCloseEscapeHoldMilliseconds,
+            PursuitCloseRearmDelayMilliseconds);
 }

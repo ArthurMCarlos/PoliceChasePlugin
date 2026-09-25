@@ -1,6 +1,9 @@
 namespace PoliceChasePlugin.Players;
 
-public sealed record PolicePlayerSnapshot(byte SessionId, string Name, bool IsReady);
+public sealed record PolicePlayerSnapshot(byte SessionId, string Name, bool IsReady)
+{
+    public long ConnectionGeneration { get; init; }
+}
 
 public enum PolicePlayerChangeKind
 {

@@ -11,6 +11,57 @@ namespace PoliceChasePlugin.Tests.Pursuit;
 [NonParallelizable]
 public class PolicePursuitServiceTests
 {
+    [Test]
+    public void TerminalDoesNotSuppressPlayerSelectedDuringTracking()
+    {
+        var context = CreateContext(configure: c => { c.PursuitCloseEnabled = true; c.PursuitAggressiveDrivingEnabled = true; });
+        context.State.NextTrackingResult = new(PolicePursuitTrackingStatus.Escaped, null, 0);
+        context.State.DuringTracking = () =>
+        {
+            context.PlayerSource.Disconnect(10);
+            context.PlayerSource.Connect(11, "Other", true);
+        };
+        context.Service.UpdateOnce();
+        context.State.DuringTracking = null;
+        context.State.NextTrackingResult = new(PolicePursuitTrackingStatus.Active, 100, 20);
+        context.Service.UpdateOnce();
+        Assert.That(context.State.TrackRequests, Has.Count.EqualTo(2));
+        Assert.That(context.State.TrackRequests.Last().TargetSessionId, Is.EqualTo(11));
+    }
+
+    [TestCase(PolicePursuitTrackingStatus.Escaped)]
+    [TestCase(PolicePursuitTrackingStatus.MaxDistanceExceeded)]
+    public void CloseModeConsumesTerminalWhileUninitializedAndDoesNotRearm(PolicePursuitTrackingStatus status)
+    {
+        var context = CreateContext(policeInitialized: false, configure: c =>
+        { c.PursuitCloseEnabled = true; c.PursuitAggressiveDrivingEnabled = true; });
+        context.State.NextTrackingResult = new(status, null, 0);
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+        Assert.That(context.State.TrackRequests, Has.Count.EqualTo(1));
+        context.PlayerSource.Connect(11, "Other", true);
+        context.Service.UpdateOnce();
+        Assert.That(context.State.TrackRequests.Last().TargetSessionId, Is.EqualTo(11));
+    }
+
+    [Test]
+    public void CloseSummaryIsThrottledButTransitionsAreImmediate()
+    {
+        var context = CreateContext(configure: c => { c.PursuitCloseEnabled = true; c.PursuitAggressiveDrivingEnabled = true; });
+        var diagnostics = new PolicePursuitCloseDiagnostics(200, 250, 70, 60, 90, 80, 5, "Curve", true, "Follow", false);
+        context.State.NextTrackingResult = new(PolicePursuitTrackingStatus.Active, 250, 70) { CloseDiagnostics = diagnostics };
+        context.Service.UpdateOnce();
+        context.Service.UpdateOnce();
+        Assert.That(LogCount("Close summary"), Is.EqualTo(1));
+        context.Clock.AdvanceMilliseconds(5000);
+        context.Service.UpdateOnce();
+        Assert.That(LogCount("Close summary"), Is.EqualTo(2));
+        context.State.NextTrackingResult = context.State.NextTrackingResult with
+        { CloseDiagnostics = diagnostics with { TacticPhase = "Bypass", EscapePending = true } };
+        context.Service.UpdateOnce();
+        Assert.That(LogCount("Close transition"), Is.EqualTo(2));
+    }
+
     private CollectingLogSink _sink = null!;
 
     [SetUp]

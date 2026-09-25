@@ -8,6 +8,30 @@ public class PoliceChaseConfigurationValidator : AbstractValidator<PoliceChaseCo
 {
     public PoliceChaseConfigurationValidator()
     {
+        When(c => c.PursuitCloseEnabled, () =>
+        {
+            RuleFor(c => c.PursuitAggressiveDrivingEnabled).Equal(true);
+            RuleFor(c => c.PursuitLaneChangeEnabled).Equal(true);
+            RuleFor(c => c.PursuitCloseAssistStartMeters).Must(float.IsFinite).GreaterThan(0);
+            RuleFor(c => c.PursuitCloseAssistFullMeters).Must(float.IsFinite).GreaterThan(0);
+            RuleFor(c => c.PursuitCloseMaxAdvantageKph).Must(float.IsFinite).GreaterThan(0);
+            RuleFor(c => c.PursuitCloseMaxAccelerationMetersPerSecondSquared).Must(float.IsFinite).GreaterThan(0);
+            RuleFor(c => c.PursuitCloseMaxJerkMetersPerSecondCubed).Must(float.IsFinite).GreaterThan(0);
+            RuleFor(c => c.PursuitCloseMaxSpeedKph).Must(float.IsFinite).GreaterThan(0);
+            RuleFor(c => c.PursuitCloseObstacleHoldMilliseconds).GreaterThan(0);
+            RuleFor(c => c.PursuitCloseObstacleDeficitKph).Must(float.IsFinite).GreaterThan(0);
+            RuleFor(c => c.PursuitCloseBypassLookaheadMeters).Must(float.IsFinite).GreaterThan(0);
+            RuleFor(c => c.PursuitCloseReturnClearanceMeters).Must(float.IsFinite).GreaterThan(0);
+            RuleFor(c => c.PursuitCloseEscapeDistanceMeters).Must(float.IsFinite).GreaterThan(0);
+            RuleFor(c => c.PursuitCloseEscapeHoldMilliseconds).GreaterThan(0);
+            RuleFor(c => c.PursuitCloseRearmDelayMilliseconds).GreaterThan(0);
+            RuleFor(c => c.PursuitCloseAssistStartMeters).GreaterThan(c => c.PursuitCloseDistanceMeters);
+            RuleFor(c => c.PursuitCloseAssistFullMeters).GreaterThan(c => c.PursuitCloseAssistStartMeters);
+            RuleFor(c => c.PursuitCloseEscapeDistanceMeters)
+                .GreaterThan(c => c.PursuitCloseAssistFullMeters).LessThan(c => c.PursuitMaxDistanceMeters);
+            RuleFor(c => c.PursuitCloseBypassLookaheadMeters).GreaterThanOrEqualTo(c => c.PursuitLaneChangeDistanceMeters);
+            RuleFor(c => c.PursuitCloseMaxSpeedKph).GreaterThanOrEqualTo(c => c.PursuitMaxSpeedKph);
+        });
         When(configuration => configuration.Enabled, () =>
         {
             RuleFor(configuration => configuration.PoliceCarSessionId)

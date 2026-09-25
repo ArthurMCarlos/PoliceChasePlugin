@@ -76,7 +76,10 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
                     options.LaneChange.LookaheadMeters),
             options.Driving == null
                 ? null
-                : MapDrivingOptions(options.Driving)));
+                : MapDrivingOptions(options.Driving))
+        {
+            ClosePursuit = options.ClosePursuit is { } close ? MapCloseOptions(close) : null
+        });
         return new PolicePursuitTrackingResult(
             MapStatus(result.Status),
             result.RouteDistanceMeters,
@@ -98,13 +101,22 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
                 : MapPitDiagnostics(result.PitDiagnostics),
             result.PitEligibilityDiagnostics == null
                 ? null
-                : MapPitEligibilityDiagnostics(result.PitEligibilityDiagnostics));
+                : MapPitEligibilityDiagnostics(result.PitEligibilityDiagnostics))
+        {
+            CloseDiagnostics = result.CloseDiagnostics is { } closeDiagnostics ? MapCloseDiagnostics(closeDiagnostics) : null
+        };
     }
 
     public void SetDesiredSpeed(float metersPerSecond) =>
         _state.SetPursuitDesiredSpeed(metersPerSecond);
 
     public void ReleasePursuit() => _state.ReleasePursuit();
+
+    internal static PolicePursuitCloseDiagnostics MapCloseDiagnostics(AssettoServer.Server.Ai.AiPursuitCloseDiagnostics value) =>
+        new(value.PhysicalClearanceMeters, value.RouteDistanceMeters, value.TargetSpeedMetersPerSecond,
+            value.PoliceSpeedMetersPerSecond, value.RequestedSpeedMetersPerSecond, value.EffectiveSpeedMetersPerSecond,
+            value.AppliedAcceleration, value.Limiter?.ToString(), value.AssistActive, value.TacticPhase, value.EscapePending)
+        { Revision = value.Revision };
 
     internal static PolicePursuitTrackingStatus MapStatus(CoreTrackingStatus status) =>
         status switch
@@ -116,6 +128,7 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             CoreTrackingStatus.MaxDistanceExceeded =>
                 PolicePursuitTrackingStatus.MaxDistanceExceeded,
             CoreTrackingStatus.NoRoute => PolicePursuitTrackingStatus.NoRoute,
+            CoreTrackingStatus.Escaped => PolicePursuitTrackingStatus.Escaped,
             _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
         };
 
@@ -189,6 +202,15 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
             SourceAvailableDistanceMeters = diagnostics.SourceAvailableDistanceMeters,
             DestinationAvailableDistanceMeters = diagnostics.DestinationAvailableDistanceMeters
         };
+
+    internal static AssettoServer.Server.Ai.AiPursuitCloseOptions MapCloseOptions(
+        PolicePursuitCloseOptions options) => new(
+            options.AssistStartMeters, options.AssistFullMeters,
+            options.MaxAdvantageMetersPerSecond, options.MaxAccelerationMetersPerSecondSquared,
+            options.MaxJerkMetersPerSecondCubed, options.MaxSpeedMetersPerSecond,
+            options.ObstacleHoldMilliseconds, options.ObstacleDeficitMetersPerSecond,
+            options.BypassLookaheadMeters, options.ReturnClearanceMeters,
+            options.EscapeDistanceMeters, options.EscapeHoldMilliseconds, options.RearmDelayMilliseconds);
 
     internal static CoreDrivingOptions MapDrivingOptions(
         PolicePursuitDrivingOptions options) =>
@@ -468,6 +490,8 @@ internal sealed class AssettoServerNativePolicePursuitState : INativePolicePursu
                 PolicePursuitLaneMotivation.FutureJunction,
             CoreLaneMotivation.TargetLaneAlignment =>
                 PolicePursuitLaneMotivation.TargetLaneAlignment,
+            CoreLaneMotivation.TrafficBypass => PolicePursuitLaneMotivation.TrafficBypass,
+            CoreLaneMotivation.TrafficReturn => PolicePursuitLaneMotivation.TrafficReturn,
             _ => throw new ArgumentOutOfRangeException(nameof(motivation), motivation, null)
         };
 

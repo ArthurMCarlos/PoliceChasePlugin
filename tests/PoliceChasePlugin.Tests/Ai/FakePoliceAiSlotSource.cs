@@ -12,6 +12,7 @@ internal sealed class FakePoliceAiState : IPoliceAiState
     public List<(byte TargetSessionId, PolicePursuitTrackingOptions Options)> TrackRequests { get; } = new();
     public List<float> SpeedRequests { get; } = new();
     public int ReleaseCount { get; private set; }
+    public Action? DuringTracking { get; set; }
 
     public FakePoliceAiState(bool isInitialized)
     {
@@ -23,6 +24,7 @@ internal sealed class FakePoliceAiState : IPoliceAiState
         PolicePursuitTrackingOptions options)
     {
         TrackRequests.Add((targetSessionId, options));
+        DuringTracking?.Invoke();
         return TrackingResults.TryDequeue(out var result)
             ? result
             : NextTrackingResult;

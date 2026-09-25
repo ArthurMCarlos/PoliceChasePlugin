@@ -30,6 +30,27 @@ public sealed class PolicePursuitService : IPolicePursuitService
     private long? _lastPitEligibilityTimestamp;
     private readonly Dictionary<int, bool> _loggedJunctionDecisions = new();
     private bool _routeTemporarilyLost;
+    private (bool Assist, string Tactic, bool Escape)? _lastCloseSignature;
+    private long? _lastCloseSummary;
+
+    private void LogCloseDiagnostics(byte target, PolicePursuitCloseDiagnostics? value)
+    {
+        if (value == null) return;
+        var signature = (value.AssistActive, value.TacticPhase, value.EscapePending);
+        if (_lastCloseSignature != signature)
+        {
+            Log.Information("[PoliceChase] Close transition: target {Target}; assist {Assist}; tactic {Tactic}; escape pending {Escape}; revision {Revision}",
+                target, value.AssistActive, value.TacticPhase, value.EscapePending, value.Revision);
+            _lastCloseSignature = signature;
+        }
+        var now = _timeProvider.GetTimestamp();
+        if (_lastCloseSummary.HasValue && _timeProvider.GetElapsedTime(_lastCloseSummary.Value, now) < TimeSpan.FromSeconds(5)) return;
+        _lastCloseSummary = now;
+        Log.Information("[PoliceChase] Close summary: target {Target}; physical {Physical:F1}m; route {Route:F1}m; target speed {TargetSpeed:F1}km/h; police {PoliceSpeed:F1}km/h; requested {Requested:F1}km/h; effective {Effective:F1}km/h; acceleration {Acceleration:F2}m/s2; limiter {Limiter}; tactic {Tactic}",
+            target, value.PhysicalClearanceMeters, value.RouteDistanceMeters, value.TargetSpeedMetersPerSecond * 3.6f,
+            value.PoliceSpeedMetersPerSecond * 3.6f, value.RequestedSpeedMetersPerSecond * 3.6f,
+            value.EffectiveSpeedMetersPerSecond * 3.6f, value.AppliedAcceleration, value.Limiter, value.TacticPhase);
+    }
 
     public PolicePursuitService(
         PoliceChaseConfiguration configuration,
@@ -66,7 +87,10 @@ public sealed class PolicePursuitService : IPolicePursuitService
                     configuration.PursuitPitMaxClosingSpeedKph / 3.6f,
                     configuration.PursuitPitLateralOffsetMeters,
                     configuration.PursuitPitCommitMilliseconds,
-                    configuration.PursuitPitCooldownMilliseconds) : null));
+                    configuration.PursuitPitCooldownMilliseconds) : null))
+        {
+            ClosePursuit = configuration.CreateClosePursuitOptions()
+        };
         if (configuration.PursuitPitEnabled)
             Log.Information(
                 "[PoliceChase] PIT diagnostic config: enabled {Enabled}; maxDistance {MaxDistance:F1}m; maxClosing {MaxClosing:F1}km/h; offset {Offset:F2}m; commit {Commit}ms; cooldown {Cooldown}ms",
@@ -80,7 +104,9 @@ public sealed class PolicePursuitService : IPolicePursuitService
 
     public void UpdateOnce()
     {
-        var targetSessionId = _targetService.CurrentTargetSessionId;
+        if (_configuration.PursuitCloseEnabled) _targetService.Refresh();
+        var targetIdentity = _targetService.CurrentTargetIdentity;
+        var targetSessionId = targetIdentity?.SessionId;
 
         if (!targetSessionId.HasValue)
         {
@@ -106,7 +132,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
         if (state == null)
             return;
 
-        if (!state.IsInitialized)
+        if (!state.IsInitialized && !_configuration.PursuitCloseEnabled)
         {
             ReleaseInternal("police-state-uninitialized");
             return;
@@ -148,6 +174,13 @@ public sealed class PolicePursuitService : IPolicePursuitService
             case PolicePursuitTrackingStatus.WaitingForSpawn:
                 break;
             case PolicePursuitTrackingStatus.MaxDistanceExceeded:
+            case PolicePursuitTrackingStatus.Escaped:
+                if (_configuration.PursuitCloseEnabled)
+                {
+                    Log.Information("[PoliceChase] Pursuit ended: {Reason}; target {TargetSessionId}; rearm delay {Delay}ms",
+                        result.Status, targetSessionId.Value, _configuration.PursuitCloseRearmDelayMilliseconds);
+                    _targetService.SuppressTarget(targetIdentity!, TimeSpan.FromMilliseconds(_configuration.PursuitCloseRearmDelayMilliseconds));
+                }
                 ReleaseInternal("max-distance-exceeded");
                 ClearSuspension();
                 break;
@@ -169,6 +202,7 @@ public sealed class PolicePursuitService : IPolicePursuitService
             default:
                 throw new ArgumentOutOfRangeException(nameof(result.Status), result.Status, null);
         }
+        LogCloseDiagnostics(targetSessionId.Value, result.CloseDiagnostics);
     }
 
     public async Task RunAsync(CancellationToken stoppingToken)
@@ -290,6 +324,8 @@ public sealed class PolicePursuitService : IPolicePursuitService
 
     private void ResetRouteDiagnostics()
     {
+        _lastCloseSignature = null;
+        _lastCloseSummary = null;
         _lastLoggedRouteRevision = null;
         _lastLoggedLaneChangeRevision = null;
         _lastLaneChangeEvaluationSignature = null;
